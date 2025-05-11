@@ -2,6 +2,6 @@ package scomm
 
 import "log"
 
-func scomm() {
-	log.Println("scomm scomm")
+func Scomm() {
+	log.Println("scomm Scomm")
 }
