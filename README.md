@@ -30,6 +30,22 @@ When file descriptor 6 is used, the lines in FILE1 only will be output on it, af
 Use cases:
 
 The main idea of scomm is that I receive "new" data in FILE2, and FILE1 contains the "old/previous" data. Instead of processing the FILE2 data in full, I extract only what is new in FILE2 (does not exist in FILE1) and process these as "inserts" maybe, and only what is old in FILE1 (does not exist anymore in FILE2) and process these as "deletes" maybe.
+FILE1 in this case can be the previously received data in a file, or a query from a database returning existing data.
+FILE2 can be the newly received data in a file, or a query from a database.
 
 Examples:
 
+simple - 
+
+Process changes only between two existing files, one old and one new:
+
+Process changes only between two existing files, one old which was compressed and one new:
+
+If the second file is compressed too:
+
+Compare database contents (mySQL in this case, but can be any as long as data can be extracted in the required format) against a new file:
+
+Compare a "new" database, which contains the latest data, with an "old" database which contains the previous data:
+
+    command
+    ... and process the output to update the old database.
