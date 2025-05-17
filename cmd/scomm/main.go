@@ -13,5 +13,8 @@ import (
 
 func main() {
 	log.Println("cmd scomm main")
+
+	// get all parameters
+	// set package values or pass as parameters
 	scomm.Scomm()
 }
