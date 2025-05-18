@@ -68,10 +68,10 @@ func getSimpleField(line string, pos [2]int, delimiter string) string {
 	return ss[pos[0]-1]
 }
 
-func getCompoundField(line string, pos [][2]int) string {
+func getCompoundField(line string, pos [][2]int, delimiter string) string {
 	var s string
 
-	if Delimiter == "" {
+	if delimiter == "" {
 		for _, v := range pos {
 			var x, y int
 			if v[0] == 0 {
@@ -93,7 +93,7 @@ func getCompoundField(line string, pos [][2]int) string {
 		return s
 	}
 
-	ss := strings.Split(line, Delimiter)
+	ss := strings.Split(line, delimiter)
 	for _, v := range pos {
 		if v[0] == v[1] { // single field
 			if v[0] > len(ss) {
@@ -113,43 +113,17 @@ func getCompoundField(line string, pos [][2]int) string {
 					log.Println("invalid data: " + line)
 					os.Exit(1)
 				}
-				s += ss[w-1] + Delimiter
+				s += ss[w-1] + delimiter
 			}
 		}
 	}
 	// take out the last delimiter
-	return strings.TrimRight(s, Delimiter)
-}
-
-// getTag returns the tag serial number part of the input line
-func getAgency(line string, apencyPos ) string {
-	return getSimpleField(line, agencyPos)
-}
-
-func getTag(line string) string {
-	// return getSimpleField(line, tagPos)
-	return getCompoundField(line, tagPos)
-}
-
-// getKey returns the agency and tag serial number parts of the input line (the key in a key-value map)
-func getKey(line string) string {
-	if Delimiter == "" {
-		return getAgency(line) + getTag(line)
-	}
-	return strings.Trim(getAgency(line)+Delimiter+getTag(line), Delimiter)
-}
-
-// getPayload returns the fields other then the key fields in the input line, likely including the tag status
-func getPayload(line string) string {
-	return getCompoundField(line, payloadPos)
+	return strings.TrimRight(s, delimiter)
 }
 
 // getTagLine returns all the tag related fields from the input line (TVL files may have extra info we do not use)
-func getTagLine(line string) string {
-	if Delimiter == "" {
-		return getKey(line) + getPayload(line)
-	}
-	return strings.Trim(getKey(line)+Delimiter+getPayload(line), Delimiter)
+func getCompoundFieldValue(line string, posKey, posPayload [][2]int, delimiter string) string {
+		return strings.Trim(getCompoundField(line, posKey, delimiter) + delimiter+ getCompoundField(line, posPayload, delimiter), delimiter)
 }
 
 // parseListItem parses an input int or int-int interval into an array [2]int
