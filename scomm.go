@@ -26,17 +26,6 @@ var (
 	newKeysList                                                      map[string]struct{}
 )
 
-func verbose(params ...interface{}) {
-	if Verbose {
-		log.Println(params...)
-	}
-}
-
-// TODO remove all calls to this or comment it out
-func dbg(params ...interface{}) {
-		log.Println("DEBUG:", params...)
-}
-
 // TODO I dont think this is used anymore since KEY is also compound
 func getSimpleField(line string, pos [2]int, delimiter string) string {
 	if delimiter == "" {
@@ -127,19 +116,19 @@ func getCompoundFieldValue(line string, posKey, posPayload [][2]int, delimiter s
 }
 
 // parseListItem parses an input int or int-int interval into an array [2]int
-func parseListItem(s string) (error, [2]int) {
+func parseListItem(param string) (error, [2]int) {
 	var ret [2]int
 
-	if s == "" {
+	if param == "" {
 		return errors.New("option requires range argument"), ret
 	}
 
 	if strings.Contains(s, "-") {
 
-		ss := strings.Split(s, "-")
+		ss := strings.Split(param, "-")
 
 		if len(ss) > 2 {
-			return errors.New("invalid range " + s), ret
+			return errors.New("invalid range " + param), ret
 		}
 
 		if ss[0] == "" {
@@ -168,18 +157,20 @@ func parseListItem(s string) (error, [2]int) {
 		return nil, ret
 	}
 
-	i, err := strconv.Atoi(s)
+	i, err := strconv.Atoi(param)
 	if err != nil {
 		return err, ret // TODO use fmt.Errorf
 	}
 
 	if Delimiter != "" && i <= 0 {
-		return errors.New("field is invalid " + s), ret
+		return errors.New("field is invalid " + param), ret
 	}
 
 	ret[0], ret[1] = i, i
 	return nil, ret
 }
+
+func parseList(param string) 
 
 // parseTagParams parses the agency, tag and payload parameters, which define the TVL structure; some projects may have extra data in the TVL file
 func parseTagParams(agencyParam, tagParam, payloadParam string) error {
@@ -231,31 +222,23 @@ func parseTagParams(agencyParam, tagParam, payloadParam string) error {
 	return nil
 }
 
-// getFileValid returns a file from a file descriptor and if it ok to use
-func isFDValid(fd int, name string) (*os.File, bool) {
-f := os.NewFile(uintptr(fd), name)
-if f == nil {
-	log.Println("invalid fd", fd, name)
-	fmt.Println("invalid fd", fd, name)
-	return f, false
-}
-_, err := f.Stat()
-if err != nil && verbose {
-	log.Println("cannot stat fd", fd, name)
-	fmt.Println("cannot stat fd", fd, name)
-}
-return f, err == nil
-}
-
 //////////////////////////////////////////////////
 
-func Scomm(agencyParam string) error {
+func Scomm(
+	verbose bool,
+	skipLines int,
+	keyParam string,
+	payloadParam string,
+	delimiter string,
+	batchSize int,
+	delimiterOut string, 
+	oldDataIn, newDataIn io.Reader,
+	newDataOut, oldDataOut, commDataOut io.Writer
+) error {
 	log.SetFlags(log.Ldate | log.Ltime)
-	log.Println("scomm Scomm")
+	log.Println("Start Scomm")
 
-	if Verbose {
-	log.Println("start scomm")
-	}
+	verbose("start scomm")
 	
 	if err := parseTagParams(); err != nil {
 		log.Println(err)
@@ -608,4 +591,34 @@ func Scomm(agencyParam string) error {
 	
 	log.Println("end tvldiff, time taken", math.Ceil(ts2.Sub(ts1).Seconds()), "sec")
 	os.Exit(exitcode)
+	}
+
+/////////////
+
+	func verbose(params ...interface{}) {
+		if Verbose {
+			log.Println(params...)
+		}
+	}
+	
+/////////////
+	// TODO remove all calls to this or comment it out
+	func dbg(params ...interface{}) {
+			log.Println("DEBUG:", params...)
+	}
+	
+// IsFDValid returns a file from a file descriptor and if it ok to use
+func IsFDValid(fd int, name string) (*os.File, bool) {
+	f := os.NewFile(uintptr(fd), name)
+	if f == nil {
+		log.Println("invalid fd", fd, name)
+		fmt.Println("invalid fd", fd, name)
+		return f, false
+	}
+	_, err := f.Stat()
+	if err != nil && verbose {
+		log.Println("cannot stat fd", fd, name)
+		fmt.Println("cannot stat fd", fd, name)
+	}
+	return f, err == nil
 	}

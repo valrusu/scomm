@@ -31,8 +31,63 @@ func main() {
 	// flag.StringVar(&testParam, "test", "", "internal") // TODO write proper go test
 	// flag.Parse()
 	
-	// set package values or pass as parameters
-	if err:=scomm.Scomm("1"); err !=nil {
+	// params:
+	// verbose: extra log output on stderr
+	// skipLines: number of lines to skip from each input
+	// keyParam: string defining the key, can be a list
+	// PayloadParam: string defining the key payloads, can be a list - not sure this is used and how NOT USED
+	// delimiter: empty for position-based, char (or string?) for separated fields
+	// batchSize: 0 forces full mode; why? scomm should run by default in batch mode with a default batch size
+	// delimiterOut: line to separate output in case it goes to the same writer
+
+	// IDEA: allow user to specify which output goes where? like -old fd6 -new fd5   or  -old stdout -new stdout
+	// if 2+ get the same writer, then I need delimiterOut; if -old/-new/-common not specified, then discard
+
+	// the tool is meant to DO something, I should not have to enable things, more to disable
+	// so by default it should output as much as possible, and have options to disable stuff
+
+	// INPUT logic:
+	// FD3 good: use for OLD			FD3 bad: use stdin
+	// FD4 good: use for NEW			FD4 bad: use stdin
+	// both OLD and NEW from stdin: error
+
+	// OUTPUT logic:
+	// FD7 good: use for COMMON			FD7 bad: !-common: use stdout for COMMON		FD7 bad: -common: discard COMMON
+	// FD5 good: use for NEW			FD5 bad: !-new: use stdout for NEW				FD5 bad: -new: discard NEW
+	// FD6 good: use for OLD			FD6 bad: !-old: use stdout for OLD				FD6 bad: -old: discard OLD
+	// at least 2 on stdout: -delimiterOut: ok			at least 2 on stdout: !-delimiterOut: error	
+	// -old = do not output OLD			-new = do not output NEW			-common = do not output COMMON
+
+	// COMPARE logic:
+	// read OLD in mapOld(full line)
+	// read all NEW lines:
+	//		matches OLD: 	yes: print or discard; delete from mapOld; add to mapNew
+	//						no: KEY specified: save key value in mapNewKeys (I could exclude more later)
+	// KEY specified: will further compare OLD and NEW based on KEY existence (lines were different due to other fields)
+	//		go through all OLD, get KEY field(s)
+	//		found in mapNewKeys? 	yes: delete from mapOld (same old key exists in NEW => data got updated)
+	// NEW on stdout and COMMON was stdout: print delimiterOut
+	// print mapNew
+	// OLD on stdout and ( COMMON was stdout or NEW was stdout ): print delimiterOut
+	// print MapOld
+
+	file3, file3ok := scomm.IsFDValid(3,"oldDataIn")
+	file4, file4ok := scomm.IsFDValid(4,"newDataIn")
+	file5, file5ok := scomm.IsFDValid(5,"newDataOut")
+	file6, file6ok := scomm.IsFDValid(6,"oldDataOut")
+	file7, file7ok := scomm.IsFDValid(7,"commonDataOut")
+
+	if err:=scomm.Scomm(
+		true,        // verbose bool,
+		1,           //skipLines int,
+		"1,2",       // keyParam string,
+		"",          // payloadParam string, -- not used yet
+		",",         // delimiter string,
+		0,           // batchSize int,
+		"xxxXXXxxx", // delimiterOut string 
+		file3, file4,
+		file5, file6, file7
+	); err !=nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
