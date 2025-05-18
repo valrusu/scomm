@@ -6,7 +6,9 @@ package main
 // "github.com/valrusu/scomm/scomm"
 
 import (
+	"fmt"
 	"log"
+	"os"
 
 	"github.com/valrusu/scomm"
 )
@@ -20,7 +22,7 @@ func main() {
 	// 		"one which contains the new and changed tags and one with the old tags that were deleted\n")
 	// 	flag.PrintDefaults()
 	// }
-	
+
 	// flag.BoolVar(&verbose, "v", false, "bool; verbose mode")
 	// flag.BoolVar(&headerline, "H", true, "bool; header line; set if the files have a header line, which will be skipped")
 	// flag.StringVar(&agencyParam, "a", "1-4", "agency field definition; without -d use a fixed length fields, with -d use a field,list")
@@ -30,7 +32,7 @@ func main() {
 	// flag.IntVar(&batchSize, "b", 0, "batch size for reading input files; it affects the comparins algorithm TODO write doc")
 	// flag.StringVar(&testParam, "test", "", "internal") // TODO write proper go test
 	// flag.Parse()
-	
+
 	// params:
 	// verbose: extra log output on stderr
 	// skipLines: number of lines to skip from each input
@@ -55,7 +57,7 @@ func main() {
 	// FD7 good: use for COMMON			FD7 bad: !-common: use stdout for COMMON		FD7 bad: -common: discard COMMON
 	// FD5 good: use for NEW			FD5 bad: !-new: use stdout for NEW				FD5 bad: -new: discard NEW
 	// FD6 good: use for OLD			FD6 bad: !-old: use stdout for OLD				FD6 bad: -old: discard OLD
-	// at least 2 on stdout: -delimiterOut: ok			at least 2 on stdout: !-delimiterOut: error	
+	// at least 2 on stdout: -delimiterOut: ok			at least 2 on stdout: !-delimiterOut: error
 	// -old = do not output OLD			-new = do not output NEW			-common = do not output COMMON
 
 	// COMPARE logic:
@@ -71,23 +73,23 @@ func main() {
 	// OLD on stdout and ( COMMON was stdout or NEW was stdout ): print delimiterOut
 	// print MapOld
 
-	file3, file3ok := scomm.IsFDValid(3,"oldDataIn")
-	file4, file4ok := scomm.IsFDValid(4,"newDataIn")
-	file5, file5ok := scomm.IsFDValid(5,"newDataOut")
-	file6, file6ok := scomm.IsFDValid(6,"oldDataOut")
-	file7, file7ok := scomm.IsFDValid(7,"commonDataOut")
+	file3, file3ok := scomm.IsFDValid(3, "oldDataIn")
+	file4, file4ok := scomm.IsFDValid(4, "newDataIn")
+	file5, file5ok := scomm.IsFDValid(5, "newDataOut")
+	file6, file6ok := scomm.IsFDValid(6, "oldDataOut")
+	file7, file7ok := scomm.IsFDValid(7, "commonDataOut")
 
-	if err:=scomm.Scomm(
+	if err := scomm.Scomm(
 		true,        // verbose bool,
 		1,           //skipLines int,
 		"1,2",       // keyParam string,
 		"",          // payloadParam string, -- not used yet
 		",",         // delimiter string,
 		0,           // batchSize int,
-		"xxxXXXxxx", // delimiterOut string 
+		"xxxXXXxxx", // delimiterOut string
 		file3, file4,
-		file5, file6, file7
-	); err !=nil {
+		file5, file6, file7,
+	); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
