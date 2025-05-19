@@ -218,7 +218,7 @@ func Scomm(
 	log.Println("Start Scomm")
 
 	vrb("start scomm")
-	vrb("skiLines", skipLines)
+	vrb("skipLines", skipLines)
 	vrb("keyParam", keyParam)
 	vrb("payloadParam", payloadParam)
 	vrb("dataDelim", dataDelim)
@@ -246,23 +246,25 @@ func Scomm(
 	// }
 
 	// works with files only, no "Real" process substitution :((
-	file3, file3ok := GetFDFile(3, "oldDataIn")
-	if !file3ok {
-		log.Println("bad file descriptor 3, do not use for OLD input data")
+	file3, fd3ok := GetFDFile(3, "oldDataIn")
+	if !fd3ok {
+		log.Println("bad file descriptor 3, using stdin for old data")
 	}
-	file4, file4ok := GetFDFile(4, "newDataIn")
-	if !file4ok {
-		log.Println("bad file descriptor 4, do not use for NEW input data")
-	}
-	if !file3ok && !file4ok {
-		log.Println("cannot receive both OLD and NEW data on STDIN")
-		return errors.New("cannot receive both OLD and NEW data on STDIN")
+	file4, fd4ok := GetFDFile(4, "newDataIn")
+	if !fd4ok {
+		if !fd3ok {
+			log.Println("cannot receive both files stdin")
+			return errors.New("cannot receive both files stdin") // actually I could but it should force FULL mode
+		}
+		log.Println("bad file descriptor 4, using stdin for new data")
 	}
 
 	var (
 		cntOnStdout                           int
 		fd5ok, fd6ok, fd7ok                   bool
 		file5stdout, file6stdout, file7stdout bool
+		line                                  string
+		sc3, sc4                              *bufio.Scanner
 	)
 
 	if !discardNew {
@@ -299,21 +301,21 @@ func Scomm(
 		}
 	}
 	if cntOnStdout >= 2 && outputDelim == "" {
-		log.Println("need output delimiter")
-		return errors.New("need output delimiter")
+		log.Println("need output delimiter if 2 or more outputs use stdout")
+		return errors.New("need output delimiter if 2 or more outputs use stdout")
 	}
 
-	var (
-		line     string
-		sc3, sc4 *bufio.Scanner
-		// headerNewDone  bool
-		// oldEOF, newEOF bool
-	)
-
 	batchMode := batchSize > 0
-	// read OLD data from fd3 or stdin
-	sc3 = bufio.NewScanner(file3)
-	sc4 = bufio.NewScanner(file4)
+	if fd3ok {
+		sc3 = bufio.NewScanner(file3)
+	} else {
+		sc3 = bufio.NewScanner(os.Stdin)
+	}
+	if fd4ok {
+		sc4 = bufio.NewScanner(file4)
+	} else {
+		sc4 = bufio.NewScanner(os.Stdin)
+	}
 
 	vrb("allocate memory")
 	if batchMode {

@@ -73,6 +73,11 @@ func main() {
 	// OLD on stdout and ( COMMON was stdout or NEW was stdout ): print delimiterOut
 	// print MapOld
 
+	// TODO I should have:
+	// inputFileSep = separator for when both inputs are coming in on the same FD or stdin
+	// inputFieldSep = fields separator
+	// outputFileSep = separator for when 2+ outputs are going out on the same FD or stdout
+
 	if err := scomm.Scomm(
 		true,                // verbose bool,
 		1,                   //skipLines int,

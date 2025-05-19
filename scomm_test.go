@@ -92,6 +92,8 @@ func TestGetCompoundField(t *testing.T) {
 		{"A1A2,A3A4A5,A6A7,A8A9A0,B1,B2B3,B4B5B6,B7B8B9B0", [][2]int{{5, 0}, {5, 0}}, ",", true, "B1,B2B3,B4B5B6,B7B8B9B0,B1,B2B3,B4B5B6,B7B8B9B0"},
 		{"A1A2,A3A4A5,A6A7,A8A9A0,B1,B2B3,B4B5B6,B7B8B9B0", [][2]int{{9, 9}}, ",", false, ""},
 		{"A1A2,A3A4A5,A6A7,A8A9A0,B1,B2B3,B4B5B6,B7B8B9B0", [][2]int{{8, 8}}, ",", true, "B7B8B9B0"},
+		{"A1A2,A3A4A5,A6A7,A8A9A0,B1,B2B3,B4B5B6,B7B8B9B0", [][2]int{{1, 1}, {2, 2}, {5, 0}}, ",", true, "A1A2,A3A4A5,B1,B2B3,B4B5B6,B7B8B9B0"},
+		{"A1A2,A3A4A5,A6A7,A8A9A0,B1,B2B3,B4B5B6,B7B8B9B0", [][2]int{{1, 1}, {2, 2}, {5, 7}}, ",", true, "A1A2,A3A4A5,B1,B2B3,B4B5B6"},
 	}
 
 	for _, v := range data {
