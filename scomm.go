@@ -22,7 +22,7 @@ var (
 	linesOld                                                         map[string]struct{}
 	linesNew                                                         map[string]struct{}
 	newKeysList                                                      map[string]struct{}
-	file5, file6, file7                                              *os.File
+	file3, file4, file5, file6, file7                                *os.File
 )
 
 // TODO I dont think this is used anymore since KEY is also compound
@@ -214,6 +214,14 @@ func Scomm(
 	discardOld, discardNew, discardCommon bool,
 ) error {
 
+	var (
+		cntOnStdout                           int
+		fd3ok, fd4ok, fd5ok, fd6ok, fd7ok     bool
+		file5stdout, file6stdout, file7stdout bool
+		line                                  string
+		sc3, sc4                              *bufio.Scanner
+	)
+
 	log.SetFlags(log.Ldate | log.Ltime)
 	log.Println("Start Scomm")
 
@@ -246,11 +254,11 @@ func Scomm(
 	// }
 
 	// works with files only, no "Real" process substitution :((
-	file3, fd3ok := GetFDFile(3, "oldDataIn")
+	file3, fd3ok = GetFDFile(3, "oldDataIn")
 	if !fd3ok {
 		log.Println("bad file descriptor 3, using stdin for old data")
 	}
-	file4, fd4ok := GetFDFile(4, "newDataIn")
+	file4, fd4ok = GetFDFile(4, "newDataIn")
 	if !fd4ok {
 		if !fd3ok {
 			log.Println("cannot receive both files stdin")
@@ -258,14 +266,6 @@ func Scomm(
 		}
 		log.Println("bad file descriptor 4, using stdin for new data")
 	}
-
-	var (
-		cntOnStdout                           int
-		fd5ok, fd6ok, fd7ok                   bool
-		file5stdout, file6stdout, file7stdout bool
-		line                                  string
-		sc3, sc4                              *bufio.Scanner
-	)
 
 	if !discardNew {
 		file5, fd5ok = GetFDFile(5, "newDataOut")
@@ -358,6 +358,7 @@ func Scomm(
 	if batchMode {
 
 		for { // read from OLD and NEW alternatively until both are done
+			// TODO the FULL mode should be included in the BATCH mode as a special case
 
 			// read batchSize lines from OLD
 			for sc3.Scan() {
@@ -374,7 +375,7 @@ func Scomm(
 
 			if err := sc3.Err(); err != nil {
 				log.Println("failed reading old lines:", err)
-				return fmt.Errorf("failed reading old tags: %v", err)
+				return fmt.Errorf("failed reading old lines: %v", err)
 			}
 			log.Println("read", cntLinesOld, "old lines")
 			log.Println("old lines", len(linesOld), "new lines", len(linesNew), "matched lines", cntSameLines)
@@ -402,7 +403,7 @@ func Scomm(
 				line = sc4.Text()
 				cntLinesNew++ // keep a count of lines read regardless if they existed in OLD
 				if cntLinesNew%2_000_000 == 0 {
-					vrb("read 2M new tags, total", cntLinesNew)
+					vrb("read 2M new lines, total", cntLinesNew)
 				}
 
 				_, found := linesOld[line]
@@ -444,18 +445,18 @@ func Scomm(
 			}
 		} // read from OLD and NEW alternatively until both are done
 
-		log.Println("read", cntLinesOld, "old tags,", cntLinesNew, "new tags,", cntSameLines, "matched,", cntNewLines, "preserved,")
+		log.Println("read", cntLinesOld, "old lines,", cntLinesNew, "new lines,", cntSameLines, "matched,", cntNewLines, "preserved,")
 
 	} else { // full mode
 
-		// read all OLD tags
+		// read all OLD lines
 
 		for sc3.Scan() {
 			line = sc3.Text()
 			cntLinesOld++
 			linesOld[line] = struct{}{}
 			if cntLinesOld%2_000_000 == 0 {
-				vrb("read 2M old tags, total", cntLinesOld)
+				vrb("read 2M old lines, total", cntLinesOld)
 			}
 		}
 
@@ -466,13 +467,13 @@ func Scomm(
 
 		log.Println("read", cntLinesOld, "old lines,", len(linesOld), "are unique")
 
-		// read all NEW tags
+		// read all NEW lines
 
 		for sc4.Scan() {
 			line = sc4.Text()
 			cntLinesNew++ // keep a count of lines read regardless if they existed in OLD
 			if cntLinesNew%2_000_000 == 0 {
-				vrb("read 2M new tags, total", cntLinesNew)
+				vrb("read 2M new lines, total", cntLinesNew)
 				vrb("old lines", len(linesOld), "new lines", len(linesNew), "matched lines", cntSameLines)
 			}
 
