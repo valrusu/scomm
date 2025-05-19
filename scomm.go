@@ -22,6 +22,7 @@ var (
 	linesOld                                                         map[string]struct{}
 	linesNew                                                         map[string]struct{}
 	newKeysList                                                      map[string]struct{}
+	file5, file6, file7                                              *os.File
 )
 
 // TODO I dont think this is used anymore since KEY is also compound
@@ -257,33 +258,45 @@ func Scomm(
 	}
 
 	var (
-		outOnStdout               int
-		file5, file6, file7       *os.File
-		file5ok, file6ok, file7ok bool
+		cntOnStdout                           int
+		fd5ok, fd6ok, fd7ok                   bool
+		file5stdout, file6stdout, file7stdout bool
 	)
 
 	if !discardNew {
-		file5, file5ok = GetFDFile(5, "newDataOut")
-		if !file5ok {
+		file5, fd5ok = GetFDFile(5, "newDataOut")
+		if fd5ok {
+			log.Println("using file descriptor 5 for NEW output data")
+		} else {
 			log.Println("bad file descriptor 5, do not use for NEW output data")
-			outOnStdout++
+			file5 = os.Stdout
+			cntOnStdout++
+			file5stdout = true
 		}
 	}
 	if !discardOld {
-		file6, file6ok = GetFDFile(6, "oldDataOut")
-		if !file6ok {
+		file6, fd6ok = GetFDFile(6, "oldDataOut")
+		if fd6ok {
+			log.Println("using file descriptor 6 for OLD output data")
+		} else {
 			log.Println("bad file descriptor 6, do not use for OLD output data")
-			outOnStdout++
+			file6 = os.Stdout
+			cntOnStdout++
+			file6stdout = true
 		}
 	}
 	if !discardCommon {
-		file7, file7ok = GetFDFile(7, "commonDataOut")
-		if !file7ok {
+		file7, fd7ok = GetFDFile(7, "commonDataOut")
+		if fd7ok {
+			log.Println("using file descriptor 7 for COMMON output data")
+		} else {
 			log.Println("bad file descriptor 7, do not use for COMMON output data")
-			outOnStdout++
+			file7 = os.Stdout
+			cntOnStdout++
+			file7stdout = true
 		}
 	}
-	if outOnStdout >= 2 && outputDelim == "" {
+	if cntOnStdout >= 2 && outputDelim == "" {
 		log.Println("need output delimiter")
 		return errors.New("need output delimiter")
 	}
@@ -300,7 +313,7 @@ func Scomm(
 	sc3 = bufio.NewScanner(file3)
 	sc4 = bufio.NewScanner(file4)
 
-	dbg("allocate memory")
+	vrb("allocate memory")
 	if batchMode {
 		linesOld = make(map[string]struct{}, batchSize)
 		linesNew = make(map[string]struct{}, 2*int(batchSize/100)) // I expect 1-2% tags to be new or updated
@@ -320,20 +333,20 @@ func Scomm(
 	if skipLines > 0 {
 		for i := 1; i <= skipLines; i++ {
 			if sc3.Scan() {
-				log.Println("ignoring old tag data header line", sc3.Text())
+				log.Println("ignoring old data header line", sc3.Text())
 			} else {
 				// unable to even read one line, and header was specified - problem
 				log.Println("unable to read old header line")
-				os.Exit(1)
+				return errors.New("unable to read old header line")
 			}
 		}
 		for i := 1; i <= skipLines; i++ {
 			if sc4.Scan() {
-				log.Println("ignoring new tag data header line", sc4.Text())
+				log.Println("ignoring new data header line", sc4.Text())
 			} else {
 				// unable to even read one line, and header was specified - problem
 				log.Println("unable to read new header line")
-				os.Exit(1)
+				return errors.New("unable to read new header line")
 			}
 		}
 	}
@@ -347,8 +360,8 @@ func Scomm(
 				line = sc3.Text()
 				cntLinesOld++
 				linesOld[line] = struct{}{}
-				if verbose && cntLinesOld%2_000_000 == 0 {
-					log.Println("read 2M old tags, total", cntLinesOld)
+				if cntLinesOld%2_000_000 == 0 {
+					vrb("read 2M old tags, total", cntLinesOld)
 				}
 				if cntLinesOld%batchSize == 0 {
 					break
@@ -356,11 +369,11 @@ func Scomm(
 			}
 
 			if err := sc3.Err(); err != nil {
-				log.Println("failed reading old tags:", err)
-				os.Exit(1)
+				log.Println("failed reading old lines:", err)
+				return fmt.Errorf("failed reading old tags: %v", err)
 			}
-			log.Println("read", cntLinesOld, "old tags")
-			log.Println("old tags", len(linesOld), "new tags", len(linesNew), "matched tags", cntSameLines)
+			log.Println("read", cntLinesOld, "old lines")
+			log.Println("old lines", len(linesOld), "new lines", len(linesNew), "matched lines", cntSameLines)
 
 			// check existing linesNew, read in previous loop and not matched
 			for line, _ := range linesNew {
@@ -370,11 +383,10 @@ func Scomm(
 					cntSameLines++
 					delete(linesOld, line)
 					delete(linesNew, line)
-					if file7ok {
+					if !discardCommon {
 						if _, err := file7.WriteString(line + "\n"); err != nil {
-							log.Println("failed to write to fd7", err)
-							fmt.Println("failed to write to fd7", err)
-							os.Exit(1)
+							log.Println("failed to write common line", err)
+							return fmt.Errorf("failed to write common line: %v", err)
 						}
 					}
 				}
@@ -385,8 +397,8 @@ func Scomm(
 			for sc4.Scan() {
 				line = sc4.Text()
 				cntLinesNew++ // keep a count of lines read regardless if they existed in OLD
-				if verbose && cntLinesNew%2_000_000 == 0 {
-					log.Println("read 2M new tags, total", cntLinesNew)
+				if cntLinesNew%2_000_000 == 0 {
+					vrb("read 2M new tags, total", cntLinesNew)
 				}
 
 				_, found := linesOld[line]
@@ -394,16 +406,17 @@ func Scomm(
 				if found { // same line exists in OLD, delete from OLD and do not add to NEW
 					cntSameLines++
 					delete(linesOld, line)
-					if file7ok {
+					if !discardCommon {
 						if _, err := file7.WriteString(line + "\n"); err != nil {
-							log.Println("failed to write to fd7", err)
-							fmt.Println("failed to write to fd7", err)
-							os.Exit(1)
+							log.Println("failed to write common line", err)
+							return fmt.Errorf("failed to write common line: %v", err)
 						}
 					}
 				} else { // line does not exist in OLD, add to NEW
 					linesNew[line] = struct{}{}
-					newKeysList[getCompoundField(line, keyPos, dataDelim)] = struct{}{}
+					if keyParam != "" { // TODO
+						newKeysList[getCompoundField(line, keyPos, dataDelim)] = struct{}{}
+					}
 				}
 				if cntLinesNew%batchSize == 0 {
 					break
@@ -411,11 +424,11 @@ func Scomm(
 			}
 
 			if err := sc4.Err(); err != nil {
-				log.Println("failed reading from old tag file:", err)
-				os.Exit(1)
+				log.Println("failed reading from old file:", err)
+				return fmt.Errorf("failed reading from old file: %v", err)
 			}
 
-			log.Println("read", cntLinesNew, "new tags")
+			log.Println("read", cntLinesNew, "new lines")
 			log.Println("old buffer", len(linesOld), "new buffer", len(linesNew), "matched", cntSameLines)
 
 			if cntLinesOld%batchSize != 0 && cntLinesNew%batchSize != 0 {
@@ -433,26 +446,26 @@ func Scomm(
 			line = sc3.Text()
 			cntLinesOld++
 			linesOld[line] = struct{}{}
-			if verbose && cntLinesOld%2_000_000 == 0 {
-				log.Println("read 2M old tags, total", cntLinesOld)
+			if cntLinesOld%2_000_000 == 0 {
+				vrb("read 2M old tags, total", cntLinesOld)
 			}
 		}
 
 		if err := sc3.Err(); err != nil {
-			log.Println("failed reading old tags:", err)
-			os.Exit(1)
+			log.Println("failed reading old lines:", err)
+			return fmt.Errorf("failed reading old lines: %v", err)
 		}
 
-		log.Println("read", cntLinesOld, "old tags,", len(linesOld), "are unique")
+		log.Println("read", cntLinesOld, "old lines,", len(linesOld), "are unique")
 
 		// read all NEW tags
 
 		for sc4.Scan() {
 			line = sc4.Text()
 			cntLinesNew++ // keep a count of lines read regardless if they existed in OLD
-			if verbose && cntLinesNew%2_000_000 == 0 {
-				log.Println("read 2M new tags, total", cntLinesNew)
-				log.Println("old tags", len(linesOld), "new tags", len(linesNew), "matched tags", cntSameLines)
+			if cntLinesNew%2_000_000 == 0 {
+				vrb("read 2M new tags, total", cntLinesNew)
+				vrb("old lines", len(linesOld), "new lines", len(linesNew), "matched lines", cntSameLines)
 			}
 
 			_, found := linesOld[line]
@@ -460,11 +473,10 @@ func Scomm(
 			if found { // same line exists in OLD, delete from OLD and do not add to NEW
 				cntSameLines++
 				delete(linesOld, line)
-				if file7ok {
+				if !discardCommon {
 					if _, err := file7.WriteString(line + "\n"); err != nil {
-						log.Println("failed to write to fd7", err)
-						fmt.Println("failed to write to fd7", err)
-						os.Exit(1)
+						log.Println("failed to write common line", err)
+						return fmt.Errorf("failed to write common line: %v", err)
 					}
 				}
 			} else { // line does not exist in OLD, add to NEW
@@ -477,11 +489,11 @@ func Scomm(
 		}
 
 		if err := sc4.Err(); err != nil {
-			log.Println("failed reading new tags:", err)
-			os.Exit(1)
+			log.Println("failed reading new lines:", err)
+			return fmt.Errorf("failed reading new lines: %v", err)
 		}
 
-		log.Println("read", cntLinesOld, "old tags,", cntLinesNew, "new tags,", cntSameLines, "matched,", cntNewLines, "preserved,")
+		log.Println("read", cntLinesOld, "old lines", cntLinesNew, "new lines,", cntSameLines, "matched,", cntNewLines, "preserved")
 
 	} /////////////////////////////////////////////////////////////////// batch mode / full mode
 
@@ -495,62 +507,59 @@ func Scomm(
 
 		for line, _ := range linesOld {
 			_, found := newKeysList[getCompoundField(line, keyPos, dataDelim)]
-			if found { // same ag+tg exists in NEW and OLD so it was changed, delete from OLD
+			if found { // same key exists in NEW and OLD so something was changed, delete from OLD, keep in NEW
 				updatedTags++
 				delete(linesOld, line)
 			}
 		}
 	}
 
-	s := fmt.Sprintf("new and updated tags: %d (%.2f%%), deleted tags: %d (%.2f%%)\n",
+	s := fmt.Sprintf("new and updated lines: %d (%.2f%%), deleted lines: %d (%.2f%%)\n",
 		len(linesNew), float64(len(linesNew))*100/float64(cntLinesOld),
 		len(linesOld), float64(len(linesOld))*100/float64(cntLinesOld))
 	log.Println(s)
 
-	log.Println("write newDataOut and oldDataOut files")
-
-	done := make(chan error)
-
-	go func() {
-		for str, _ := range linesNew {
-			_, err := file5.WriteString(str + "\n")
-			if err != nil {
-				log.Println("failed to write to merge file", err)
-				done <- errors.New("failed to write to merge file")
-				break
-			}
-		}
-		log.Println("wrote merge file")
-		done <- nil
-	}()
-
-	go func() {
-		for str, _ := range linesOld {
-			_, err := file6.WriteString(str + "\n")
-			if err != nil {
-				log.Println("failed to write to delete file", err)
-				done <- errors.New("failed to write to delete file")
-				break
-			}
-		}
-		log.Println("wrote delete file")
-		done <- nil
-	}()
-
-	err = <-done
-
-	if err != nil {
-		log.Println(err)
-		<-done
-		return err
+	if file7stdout && (file5stdout || file6stdout) { // NEW or OLD will come after COMMON on stdout
+		file7.WriteString(outputDelim + "\n")
 	}
 
-	err = <-done
+	if file5stdout && file6stdout {
+		// TODO do not parallelize this if they both go to stdout
 
-	if err != nil {
-		log.Println(err)
-		<-done
-		return err
+		if err := writeNewData(); err != nil {
+			// log.Println(err)
+			return err
+		}
+
+		file5.WriteString(outputDelim + "\n")
+
+		if err := writeOldData(); err != nil {
+			// log.Println(err)
+			return err
+		}
+	} else {
+		done := make(chan error)
+
+		go func() {
+			done <- writeNewData()
+		}()
+
+		go func() {
+			done <- writeOldData()
+		}()
+
+		err1 := <-done
+		err2 := <-done
+
+		if err1 != nil {
+			log.Println(err1)
+			return err1
+		}
+
+		if err2 != nil {
+			log.Println(err2)
+			return err2
+		}
 	}
 
 	ts2 := time.Now()
@@ -563,6 +572,32 @@ func Scomm(
 }
 
 /////////////
+
+func writeNewData() error {
+	log.Println("write newDataOut")
+	for str, _ := range linesNew {
+		_, err := file5.WriteString(str + "\n")
+		if err != nil {
+			log.Println("failed to write to new data output:", err)
+			return fmt.Errorf("failed to write new data output: %v", err)
+		}
+	}
+	log.Println("wrote new data output")
+	return nil
+}
+
+func writeOldData() error {
+	log.Println("write old data output")
+	for str, _ := range linesOld {
+		_, err := file6.WriteString(str + "\n")
+		if err != nil {
+			log.Println("failed to write to old data output:", err)
+			return fmt.Errorf("failed to write old data output: %v", err)
+		}
+	}
+	log.Println("wrote old data output")
+	return nil
+}
 
 func vrb(params ...interface{}) {
 	if Verbose {
