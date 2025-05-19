@@ -29,41 +29,41 @@ var (
 // getSimpleField extracts from a string line the substring or field defined by pos and optionally delimiter
 // pos in this case can look like either [4,7] => extract characters 4 to 7
 // or, with delimiter, [3,3]
-func getSimpleField(line string, pos [2]int, delim string) string {
+// func getSimpleField(line string, pos [2]int, delim string) string {
 
-	if delim == "" {
-		var x, y int
+// 	if delim == "" {
+// 		var x, y int
 
-		if pos[0] == 0 {
-			x = 0
-		} else {
-			x = pos[0] - 1
-		}
-		if pos[1] == 0 {
-			y = len(line)
-		} else {
-			y = pos[1]
-		}
-		if y > len(line) {
-			log.Println("invalid data: " + line)
-			os.Exit(1)
-		}
+// 		if pos[0] == 0 {
+// 			x = 0
+// 		} else {
+// 			x = pos[0] - 1
+// 		}
+// 		if pos[1] == 0 {
+// 			y = len(line)
+// 		} else {
+// 			y = pos[1]
+// 		}
+// 		if y > len(line) {
+// 			log.Println("invalid data: " + line)
+// 			os.Exit(1)
+// 		}
 
-		return line[x:y]
-	} else {
-		ss := strings.Split(line, delim)
+// 		return line[x:y]
+// 	} else {
+// 		ss := strings.Split(line, delim)
 
-		if pos[0] > len(ss) {
-			log.Println("invalid data: " + line)
-			os.Exit(1)
-			// return ""
-		}
+// 		if pos[0] > len(ss) {
+// 			log.Println("invalid data: " + line)
+// 			os.Exit(1)
+// 			// return ""
+// 		}
 
-		return ss[pos[0]-1]
-	}
-}
+// 		return ss[pos[0]-1]
+// 	}
+// }
 
-func getCompoundField(line string, pos [][2]int, delim string) string {
+func getCompoundField(line string, pos [][2]int, delim string) (string, error) {
 	var s string
 
 	if delim == "" { // position-based
@@ -77,22 +77,23 @@ func getCompoundField(line string, pos [][2]int, delim string) string {
 			if v[1] == 0 {
 				y = len(line)
 			} else {
-				y = v[1]
+				y = min(v[1], len(line))
 			}
-			if y > len(line) {
-				log.Println("invalid data: " + line)
-				os.Exit(1)
-			}
+			// if y > len(line) {
+			// 	log.Println("invalid data: " + line)
+			// 	os.Exit(1)
+			// }
 			s += line[x:y]
 		}
-		return s
+		return s, nil
 	} else { // field-based
 		ss := strings.Split(line, delim)
 		for _, v := range pos {
 			if v[0] == v[1] { // single field
 				if v[0] > len(ss) {
-					log.Println("invalid data: " + line)
-					os.Exit(1)
+					strerr := fmt.Sprintf("invalid data: %s for pattern %v delimiter %s", line, pos, delim)
+					log.Println(strerr)
+					return "", errors.New(strerr)
 				}
 				s += ss[v[0]-1] + delim
 			} else { // interval field like 3-7
@@ -104,15 +105,16 @@ func getCompoundField(line string, pos [][2]int, delim string) string {
 				}
 				for w := v[0]; w <= v[1]; w++ {
 					if w > len(ss) {
-						log.Println("invalid data: " + line)
-						os.Exit(1)
+						strerr := fmt.Sprintf("invalid data: %s for pattern %v delimiter %s", line, pos, delim)
+						log.Println(strerr)
+						return "", errors.New(strerr)
 					}
 					s += ss[w-1] + delim
 				}
 			}
 		}
 		// take out the last delimiter
-		return strings.TrimRight(s, delim)
+		return strings.TrimRight(s, delim), nil
 	}
 }
 
@@ -414,8 +416,12 @@ func Scomm(
 					}
 				} else { // line does not exist in OLD, add to NEW
 					linesNew[line] = struct{}{}
-					if keyParam != "" { // TODO
-						newKeysList[getCompoundField(line, keyPos, dataDelim)] = struct{}{}
+					if keyParam != "" {
+						keyval, err := getCompoundField(line, keyPos, dataDelim)
+						if err != nil {
+							return err
+						}
+						newKeysList[keyval] = struct{}{}
 					}
 				}
 				if cntLinesNew%batchSize == 0 {
@@ -483,7 +489,11 @@ func Scomm(
 				cntNewLines++
 				linesNew[line] = struct{}{}
 				if keyParam != "" {
-					newKeysList[getCompoundField(line, keyPos, dataDelim)] = struct{}{}
+					keyval, err := getCompoundField(line, keyPos, dataDelim)
+					if err != nil {
+						return err
+					}
+					newKeysList[keyval] = struct{}{}
 				}
 			}
 		}
@@ -506,7 +516,11 @@ func Scomm(
 		log.Println("searching for new and updated keys")
 
 		for line, _ := range linesOld {
-			_, found := newKeysList[getCompoundField(line, keyPos, dataDelim)]
+			keyval, err := getCompoundField(line, keyPos, dataDelim)
+			if err != nil {
+				return err
+			}
+			_, found := newKeysList[keyval]
 			if found { // same key exists in NEW and OLD so something was changed, delete from OLD, keep in NEW
 				updatedTags++
 				delete(linesOld, line)
