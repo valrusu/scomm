@@ -73,11 +73,11 @@ func main() {
 	// OLD on stdout and ( COMMON was stdout or NEW was stdout ): print delimiterOut
 	// print MapOld
 
-	file3, file3ok := scomm.IsFDValid(3, "oldDataIn")
-	file4, file4ok := scomm.IsFDValid(4, "newDataIn")
-	file5, file5ok := scomm.IsFDValid(5, "newDataOut")
-	file6, file6ok := scomm.IsFDValid(6, "oldDataOut")
-	file7, file7ok := scomm.IsFDValid(7, "commonDataOut")
+	file3, _ := scomm.GetFDFile(3, "oldDataIn")
+	file4, _ := scomm.GetFDFile(4, "newDataIn")
+	file5, _ := scomm.GetFDFile(5, "newDataOut")
+	file6, _ := scomm.GetFDFile(6, "oldDataOut")
+	file7, _ := scomm.GetFDFile(7, "commonDataOut")
 
 	if err := scomm.Scomm(
 		true,        // verbose bool,

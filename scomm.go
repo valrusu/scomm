@@ -131,7 +131,6 @@ func parseItem(param string) ([2]int, error) {
 	}
 
 	if strings.Contains(param, "-") {
-
 		ss := strings.Split(param, "-")
 
 		if len(ss) > 2 {
@@ -163,7 +162,6 @@ func parseItem(param string) ([2]int, error) {
 		ret[1] = i
 		return ret, nil
 	} else {
-
 		i, err := strconv.Atoi(param)
 		if err != nil {
 			return ret, err // TODO use fmt.Errorf
@@ -231,25 +229,25 @@ func Scomm(
 	// }
 
 	// works with files only, no "Real" process substitution :((
-	file3, file3ok := IsFDValid(3, "oldDataIn")
+	file3, file3ok := GetFDFile(3, "oldDataIn")
 	if !file3ok {
-		return errors.New("Bad file descriptor 3")
+		return errors.New("bad file descriptor 3")
 	}
-	file4, file4ok := IsFDValid(4, "newDataIn")
+	file4, file4ok := GetFDFile(4, "newDataIn")
 	if !file4ok {
-		return errors.New("Bad file descriptor 4")
+		return errors.New("bad file descriptor 4")
 	}
-	file5, file5ok := IsFDValid(5, "newDataOut")
+	file5, file5ok := GetFDFile(5, "newDataOut")
 	if !file5ok {
-		return errors.New("Bad file descriptor 5")
+		return errors.New("bad file descriptor 5")
 	}
-	file6, file6ok := IsFDValid(6, "oldDataOut")
+	file6, file6ok := GetFDFile(6, "oldDataOut")
 	if !file6ok {
-		return errors.New("Bad file descriptor 6")
+		return errors.New("bad file descriptor 6")
 	}
-	file7, file7ok := IsFDValid(7, "commonDataOut")
+	file7, file7ok := GetFDFile(7, "commonDataOut")
 	if !file7ok {
-		return errors.New("Bad file descriptor 7")
+		return errors.New("bad file descriptor 7")
 	}
 
 	var (
@@ -537,11 +535,14 @@ func vrb(params ...interface{}) {
 // ///////////
 // TODO remove all calls to this or comment it out
 func dbg(params ...interface{}) {
+	params = append(params, "")
+	copy(params[1:], params[0:])
+	params[0] = "DEBUG:"
 	log.Println(params...)
 }
 
-// IsFDValid returns a file from a file descriptor and if it ok to use
-func IsFDValid(fd int, name string) (*os.File, bool) {
+// GetFDFile returns a file from a file descriptor and if it ok to use
+func GetFDFile(fd int, name string) (*os.File, bool) {
 	f := os.NewFile(uintptr(fd), name)
 	if f == nil {
 		log.Println("invalid fd", fd, name)
