@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"os"
@@ -192,8 +191,15 @@ func parseList(param string) ([][2]int, error) {
 	return ret, nil
 }
 
-//////////////////////////////////////////////////
-
+// ////////////////////////////////////////////////
+// scomm reads lines from 2 files or pipes and outputs the lines which are common, the ones in first file only and the ones in the second file only
+// The input files are received on FD and FD4 respectivelly, or on STDIN; both cannot be in STDIN
+// The output lines are generated on FD5 (lines from second file only), FD6 (lines from first file only) and FD7 (lines common)
+// If FD5, FD6 or FD7 are not specified, then STDOUT will be used, and if 2 or more are output on STDOUT then the outputDelimiter is mandatory.
+// When 2 or 3 of the outputs are going to the same target, the order will be (separated by outputDelimiter):
+// 1. lines common to both files
+// 2. lines only in the second file
+// 3. lines only in the first file
 func Scomm(
 	verbose bool,
 	skipLines int,
@@ -202,20 +208,28 @@ func Scomm(
 	dataDelim string,
 	batchSize int,
 	outputDelim string,
-	oldDataIn, newDataIn io.Reader,
-	newDataOut, oldDataOut, commDataOut io.Writer,
+	discardOld, discardNew, discardCommon bool,
 ) error {
 
 	log.SetFlags(log.Ldate | log.Ltime)
 	log.Println("Start Scomm")
 
 	vrb("start scomm")
+	vrb("skiLines", skipLines)
+	vrb("keyParam", keyParam)
+	vrb("payloadParam", payloadParam)
+	vrb("dataDelim", dataDelim)
+	vrb("batchSize", batchSize)
+	vrb("outputDelim", outputDelim)
+	vrb("discardOld", discardOld)
+	vrb("discardNew", discardNew)
+	vrb("discardCommon", discardCommon)
 
 	keyPos, err := parseList(keyParam)
 
 	if err != nil {
 		log.Println(err)
-		os.Exit(1)
+		return err
 	}
 
 	ts1 := time.Now()
@@ -231,23 +245,47 @@ func Scomm(
 	// works with files only, no "Real" process substitution :((
 	file3, file3ok := GetFDFile(3, "oldDataIn")
 	if !file3ok {
-		return errors.New("bad file descriptor 3")
+		log.Println("bad file descriptor 3, do not use for OLD input data")
 	}
 	file4, file4ok := GetFDFile(4, "newDataIn")
 	if !file4ok {
-		return errors.New("bad file descriptor 4")
+		log.Println("bad file descriptor 4, do not use for NEW input data")
 	}
-	file5, file5ok := GetFDFile(5, "newDataOut")
-	if !file5ok {
-		return errors.New("bad file descriptor 5")
+	if !file3ok && !file4ok {
+		log.Println("cannot receive both OLD and NEW data on STDIN")
+		return errors.New("cannot receive both OLD and NEW data on STDIN")
 	}
-	file6, file6ok := GetFDFile(6, "oldDataOut")
-	if !file6ok {
-		return errors.New("bad file descriptor 6")
+
+	var (
+		outOnStdout               int
+		file5, file6, file7       *os.File
+		file5ok, file6ok, file7ok bool
+	)
+
+	if !discardNew {
+		file5, file5ok = GetFDFile(5, "newDataOut")
+		if !file5ok {
+			log.Println("bad file descriptor 5, do not use for NEW output data")
+			outOnStdout++
+		}
 	}
-	file7, file7ok := GetFDFile(7, "commonDataOut")
-	if !file7ok {
-		return errors.New("bad file descriptor 7")
+	if !discardOld {
+		file6, file6ok = GetFDFile(6, "oldDataOut")
+		if !file6ok {
+			log.Println("bad file descriptor 6, do not use for OLD output data")
+			outOnStdout++
+		}
+	}
+	if !discardCommon {
+		file7, file7ok = GetFDFile(7, "commonDataOut")
+		if !file7ok {
+			log.Println("bad file descriptor 7, do not use for COMMON output data")
+			outOnStdout++
+		}
+	}
+	if outOnStdout >= 2 && outputDelim == "" {
+		log.Println("need output delimiter")
+		return errors.New("need output delimiter")
 	}
 
 	var (
