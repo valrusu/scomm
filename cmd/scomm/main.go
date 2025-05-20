@@ -73,22 +73,20 @@ func main() {
 	// OLD on stdout and ( COMMON was stdout or NEW was stdout ): print delimiterOut
 	// print MapOld
 
-	file3, _ := scomm.GetFDFile(3, "oldDataIn")
-	file4, _ := scomm.GetFDFile(4, "newDataIn")
-	file5, _ := scomm.GetFDFile(5, "newDataOut")
-	file6, _ := scomm.GetFDFile(6, "oldDataOut")
-	file7, _ := scomm.GetFDFile(7, "commonDataOut")
+	// TODO I should have:
+	// inputFileSep = separator for when both inputs are coming in on the same FD or stdin
+	// inputFieldSep = fields separator
+	// outputFileSep = separator for when 2+ outputs are going out on the same FD or stdout
 
 	if err := scomm.Scomm(
-		true,        // verbose bool,
-		1,           //skipLines int,
-		"1,2",       // keyParam string,
-		"",          // payloadParam string, -- not used yet
-		",",         // delimiter string,
-		0,           // batchSize int,
-		"xxxXXXxxx", // delimiterOut string
-		file3, file4,
-		file5, file6, file7,
+		true,                // verbose bool,
+		1,                   //skipLines int,
+		"1,2",               // keyParam string,
+		"",                  // payloadParam string, -- not used yet
+		",",                 // delimiter string,
+		0,                   // batchSize int,
+		"xxxXXXxxx",         // delimiterOut string
+		false, false, false, // discard old new common
 	); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
