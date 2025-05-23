@@ -6,15 +6,22 @@ package main
 // "github.com/valrusu/scomm/scomm"
 
 import (
+	"flag"
 	"fmt"
-	"log"
+	// "log"
 	"os"
 
 	"github.com/valrusu/scomm"
 )
 
 func main() {
-	log.Println("cmd scomm main")
+
+	var (
+		verbose                                        bool
+		headerLines, batchSize                         int
+		keyParam, payloadParam, delimiter, outputDelim string
+		noCommon, noOld, noNew                         bool
+	)
 
 	// get all parameters; parse them here and pass parsed slices to scomm?
 	// flag.Usage = func() {
@@ -23,15 +30,18 @@ func main() {
 	// 	flag.PrintDefaults()
 	// }
 
-	// flag.BoolVar(&verbose, "v", false, "bool; verbose mode")
-	// flag.BoolVar(&headerline, "H", true, "bool; header line; set if the files have a header line, which will be skipped")
-	// flag.StringVar(&agencyParam, "a", "1-4", "agency field definition; without -d use a fixed length fields, with -d use a field,list")
+	flag.BoolVar(&verbose, "v", false, "bool; verbose mode")
+	flag.IntVar(&headerLines, "H", 0, "int; number header lines, which will be skipped")
+	flag.StringVar(&keyParam, "k", "", "key field definition; without -d use fixed length fields (like cut -c), with -d use a field,list (like cut -f)")
 	// flag.StringVar(&tagParam, "t", "5-14", "tag field definition; without -d use a fixed length fields, with -d use a field,list")
-	// flag.StringVar(&payloadParam, "p", "15-25", "tag's other fields than a and t; without -d use a fixed length fields, with -d use a field,list; optional")
-	// flag.StringVar(&delimiter, "d", "", "use delimited mode for a, t and p values, otherwise use fixed length fields")
-	// flag.IntVar(&batchSize, "b", 0, "batch size for reading input files; it affects the comparins algorithm TODO write doc")
-	// flag.StringVar(&testParam, "test", "", "internal") // TODO write proper go test
-	// flag.Parse()
+	flag.StringVar(&payloadParam, "p", "", "payload parameter not used currently")
+	flag.StringVar(&delimiter, "d", "", "use delimited mode for KEY and PAYLOAD values, without it use fixed length fields")
+	flag.IntVar(&batchSize, "b", 0, "batch size for reading input files")
+	flag.StringVar(&outputDelim, "D", "", "delimiter for output in case 2 or more outputs go the same file descriptor")
+	flag.BoolVar(&noCommon, "c", false, "discard common lines, otherwise output them on file descriptor 7 if specified, or stdout if not specified")
+	flag.BoolVar(&noOld, "o", false, "discard lines only in the old file, otherwise output them on file descriptor 6 if specified, or stdout if not specified")
+	flag.BoolVar(&noNew, "n", false, "discard lines only in the new file, otherwise output them on file descriptor 5 if specified, or stdout if not specified")
+	flag.Parse()
 
 	// params:
 	// verbose: extra log output on stderr
