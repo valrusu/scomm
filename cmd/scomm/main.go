@@ -8,6 +8,7 @@ package main
 import (
 	"flag"
 	"fmt"
+
 	// "log"
 	"os"
 
@@ -65,34 +66,34 @@ func main() {
 
 	// OUTPUT: without -k/-p                     with -k/-p
 	// if an FD is not "good", do not output that data; can I check this correctly for output going to another process???
-	// FD5: lines common                         lines common
-	// FD6: lines unique to FILE1                FILE1 lines for which key(file1) does not exist in FILE2
-	// FD7: lines unique to FILE2
+	// FD5: lines unique to FILE1                FILE1 lines for which key(file1) does not exist in FILE2
+	// FD6: lines unique to FILE2
+	// FD7: lines common                         lines common
 	//                                           FILE1 lines for which key(file1) exists in FILE2 but payloads are different
 
-// without k/p:
-// load all file1 into lines1
-// read lines from file2 as line2:
-// 	line2 in lines1 : common, output line2 (or line1) on FD7
-// 	                  delete from lines1
-// 	else : save line2 in lines2
-// output all lines1 on FD5
-// output all lines2 on FD6
+	// without k/p:
+	// load all file1 into lines1
+	// read lines from file2 as line2:
+	// 	line2 in lines1 : common, output line2 (or line1) on FD7
+	// 	                  delete from lines1
+	// 	else : save line2 in lines2
+	// output all lines1 on FD5
+	// output all lines2 on FD6
 
-// with k/p: treat the inputs as this is the "only" info I care about in a line; but I need original line output :(
-// load all file1 into lines1
-// read lines from file2 as line2:
-// 	line2 in lines1 : common, output line2 (or line1) on FD7
-// 	                  delete from lines1
-// 	else : save line2 in lines2
-// 	       save key2 in keys2
-// for all lines1 remaining:
-// 	key1 in keys2, payload2=payload1 : common2, output line2 on FD7 (or another one?)
-// 	                                   delete line1 from lines1
-// 	key1 in keys2, payload2<>payload1 : updated, output line2 on FD6
-// 	    								delete line1 from lines1
-// 	key1 not in keys2 : deleted, output line1 on FD5
-// anything left???
+	// with k/p: treat the inputs as this is the "only" info I care about in a line; but I need original line output :(
+	// load all file1 into lines1
+	// read lines from file2 as line2:
+	// 	line2 in lines1 : common, output line2 (or line1) on FD7
+	// 	                  delete from lines1
+	// 	else : save line2 in lines2
+	// 	       save key2 in keys2
+	// for all lines1 remaining:
+	// 	key1 in keys2, payload2=payload1 : common2, output line2 on FD7 (or another one?)
+	// 	                                   delete line1 from lines1
+	// 	key1 in keys2, payload2<>payload1 : updated, output line2 on FD6
+	// 	    								delete line1 from lines1
+	// 	key1 not in keys2 : deleted, output line1 on FD5
+	// anything left???
 
 	if err := scomm.Scomm(
 		true,                // verbose bool,
