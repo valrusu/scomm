@@ -58,35 +58,41 @@ func main() {
 	// the tool is meant to DO something, I should not have to enable things, more to disable
 	// so by default it should output as much as possible, and have options to disable stuff
 
-	// INPUT logic:
-	// FD3 good: use for OLD			FD3 bad: use stdin
-	// FD4 good: use for NEW			FD4 bad: use stdin
-	// both OLD and NEW from stdin: error
+	// INPUT:
+	// order of the files matter in the output; file1 is considered the "old" one and file2 the "new" one
+	// FILE1 from FD3
+	// FILE2 from DF4
 
-	// OUTPUT logic:
-	// FD7 good: use for COMMON			FD7 bad: !-common: use stdout for COMMON		FD7 bad: -common: discard COMMON
-	// FD5 good: use for NEW			FD5 bad: !-new: use stdout for NEW				FD5 bad: -new: discard NEW
-	// FD6 good: use for OLD			FD6 bad: !-old: use stdout for OLD				FD6 bad: -old: discard OLD
-	// at least 2 on stdout: -delimiterOut: ok			at least 2 on stdout: !-delimiterOut: error
-	// -old = do not output OLD			-new = do not output NEW			-common = do not output COMMON
+	// OUTPUT: without -k/-p                     with -k/-p
+	// if an FD is not "good", do not output that data; can I check this correctly for output going to another process???
+	// FD5: lines common                         lines common
+	// FD6: lines unique to FILE1                FILE1 lines for which key(file1) does not exist in FILE2
+	// FD7: lines unique to FILE2
+	//                                           FILE1 lines for which key(file1) exists in FILE2 but payloads are different
 
-	// COMPARE logic:
-	// read OLD in mapOld(full line)
-	// read all NEW lines:
-	//		matches OLD: 	yes: print or discard; delete from mapOld; add to mapNew
-	//						no: KEY specified: save key value in mapNewKeys (I could exclude more later)
-	// KEY specified: will further compare OLD and NEW based on KEY existence (lines were different due to other fields)
-	//		go through all OLD, get KEY field(s)
-	//		found in mapNewKeys? 	yes: delete from mapOld (same old key exists in NEW => data got updated)
-	// NEW on stdout and COMMON was stdout: print delimiterOut
-	// print mapNew
-	// OLD on stdout and ( COMMON was stdout or NEW was stdout ): print delimiterOut
-	// print MapOld
+// without k/p:
+// load all file1 into lines1
+// read lines from file2 as line2:
+// 	line2 in lines1 : common, output line2 (or line1) on FD7
+// 	                  delete from lines1
+// 	else : save line2 in lines2
+// output all lines1 on FD5
+// output all lines2 on FD6
 
-	// TODO I should have:
-	// inputFileSep = separator for when both inputs are coming in on the same FD or stdin
-	// inputFieldSep = fields separator
-	// outputFileSep = separator for when 2+ outputs are going out on the same FD or stdout
+// with k/p: treat the inputs as this is the "only" info I care about in a line; but I need original line output :(
+// load all file1 into lines1
+// read lines from file2 as line2:
+// 	line2 in lines1 : common, output line2 (or line1) on FD7
+// 	                  delete from lines1
+// 	else : save line2 in lines2
+// 	       save key2 in keys2
+// for all lines1 remaining:
+// 	key1 in keys2, payload2=payload1 : common2, output line2 on FD7 (or another one?)
+// 	                                   delete line1 from lines1
+// 	key1 in keys2, payload2<>payload1 : updated, output line2 on FD6
+// 	    								delete line1 from lines1
+// 	key1 not in keys2 : deleted, output line1 on FD5
+// anything left???
 
 	if err := scomm.Scomm(
 		true,                // verbose bool,
