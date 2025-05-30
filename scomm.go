@@ -280,12 +280,12 @@ func Scomm(
 		return err
 	}
 
-	// payloadPos, err := parseList(payloadParam)
+	payloadPos, err := parseList(payloadParam)
 
-	// if err != nil {
-	// 	log.Println(err)
-	// 	return err
-	// }
+	if err != nil {
+		log.Println(err)
+		return err
+	}
 
 	// works with files only, no "Real" process substitution :((
 	file3, fd3ok = GetFDFile(3, "file1DataIn")
