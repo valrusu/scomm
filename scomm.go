@@ -156,7 +156,7 @@ func getCompoundField(line string, pos [][2]int, delim string) (string, error) {
 			} else {
 				y = min(v[1], len(line))
 			}
-			dbg(x,y)
+			dbg(x, y)
 			// if y > len(line) {
 			// 	log.Println("invalid data: " + line)
 			// 	os.Exit(1)
@@ -222,6 +222,7 @@ func Scomm(
 		file5stdout, file6stdout, file7stdout bool
 		line                                  string
 		sc3, sc4                              *bufio.Scanner
+		usePayload                            bool
 	)
 
 	log.SetFlags(log.Ldate | log.Ltime)
