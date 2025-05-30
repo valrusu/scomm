@@ -1,5 +1,31 @@
 package scomm
 
+// the tool is meant to DO something, I should not have to enable things, more to disable
+// so by default it should output as much as possible, and have options to disable stuff
+
+// INPUT:
+// order of the files matter in the output; file1 is considered the "old" one and file2 the "new" one
+// FILE1 from FD3
+// FILE2 from DF4
+
+// OUTPUT: without -k/-p                     with -k/-p/
+// FD5: lines unique to FILE1                FILE1 lines for which key(file1) does not exist in FILE2, or key exists
+// FD6: lines unique to FILE2
+// FD7: lines common                         lines common
+//                                           FILE1 lines for which key(file1) exists in FILE2 but payloads are different
+// example without k/p:
+// 111   111   111 common FD7
+//       222   222 new FD6
+// 333         333 old FD5
+
+// with k/p: treat the inputs as this is the "only" info I care about in a line; but I need original line output :(
+// example with k/p:
+//  111 22222 33333333     111 22222 33333333      111 22222 33333333 FD7
+//  111 22222 33333333     111 22222 44444444      111 22222 44444444 FD7
+//  111 22222 33333333     111 33333 22222222      111 33333 22222222 FD6 update   111 22222 33333333 FD8 delete (option)
+//                         444 22222 33333333      444 22222 33333333 FD6 insert
+//  555 22222 33333333                             555 22222 33333333 FD5 delete
+
 import (
 	"bufio"
 	"errors"
@@ -13,16 +39,12 @@ import (
 )
 
 var (
-	Profile, Verbose                  bool
-	SkipLines, BatchSize              int
-	KeyParam, PayloadParam, Delimiter string
-	KeyPos, PayloadPos                [][2]int
-
-	cntLinesOld, cntLinesNew, cntSameLines, cntNewLines, updatedTags int
-	linesOld                                                         map[string]struct{}
-	linesNew                                                         map[string]struct{}
-	newKeysList                                                      map[string]struct{}
-	file3, file4, file5, file6, file7                                *os.File
+	cntLinesFile1, cntLinesFile2, cntSameLines, cntNewLines, updatedTags int
+	linesFile1                                                           map[string]struct{}
+	linesFile2                                                           map[string]struct{}
+	newKeysList                                                          map[string]struct{}
+	file3, file4, file5, file6, file7, file8                             *os.File
+	gverbose                                                             bool
 )
 
 // TODO I dont think this is used anymore since KEY is also compound
@@ -196,15 +218,9 @@ func getCompoundField(line string, pos [][2]int, delim string) (string, error) {
 	}
 }
 
-// ////////////////////////////////////////////////
+///////////////////////////////////////////////////
+
 // scomm reads lines from 2 files or pipes and outputs the lines which are common, the ones in first file only and the ones in the second file only
-// The input files are received on FD and FD4 respectivelly, or on STDIN; both cannot be in STDIN
-// The output lines are generated on FD5 (lines from second file only), FD6 (lines from first file only) and FD7 (lines common)
-// If FD5, FD6 or FD7 are not specified, then STDOUT will be used, and if 2 or more are output on STDOUT then the outputDelimiter is mandatory.
-// When 2 or 3 of the outputs are going to the same target, the order will be (separated by outputDelimiter):
-// 1. lines common to both files
-// 2. lines only in the second file
-// 3. lines only in the first file
 func Scomm(
 	verbose bool,
 	skipLines int,
@@ -212,39 +228,21 @@ func Scomm(
 	payloadParam string,
 	dataDelim string,
 	batchSize int,
-	outputDelim string,
-	discardOld, discardNew, discardCommon bool,
+	extraFile1 bool,
+	discard5, discard6, discard7, discard8, discard9 bool,
 ) error {
 
 	var (
-		cntOnStdout                           int
-		fd3ok, fd4ok, fd5ok, fd6ok, fd7ok     bool
-		file5stdout, file6stdout, file7stdout bool
-		line                                  string
-		sc3, sc4                              *bufio.Scanner
-		usePayload                            bool
+		fd3ok, fd4ok, fd5ok, fd6ok, fd7ok, fd8ok bool
+		line                                     string
+		sc3, sc4                                 *bufio.Scanner
+		useKey                                   bool
 	)
 
 	log.SetFlags(log.Ldate | log.Ltime)
 	log.Println("Start Scomm")
 
-	vrb("start scomm")
-	vrb("skipLines", skipLines)
-	vrb("keyParam", keyParam)
-	vrb("payloadParam", payloadParam)
-	vrb("dataDelim", dataDelim)
-	vrb("batchSize", batchSize)
-	vrb("outputDelim", outputDelim)
-	vrb("discardOld", discardOld)
-	vrb("discardNew", discardNew)
-	vrb("discardCommon", discardCommon)
-
-	keyPos, err := parseList(keyParam)
-
-	if err != nil {
-		log.Println(err)
-		return err
-	}
+	gverbose = verbose
 
 	ts1 := time.Now()
 	// if profile {
@@ -256,56 +254,95 @@ func Scomm(
 	// 	pprof.StartCPUProfile(proffile)
 	// }
 
-	// works with files only, no "Real" process substitution :((
-	file3, fd3ok = GetFDFile(3, "oldDataIn")
-	if !fd3ok {
-		log.Println("bad file descriptor 3, using stdin for old data")
-	}
-	file4, fd4ok = GetFDFile(4, "newDataIn")
-	if !fd4ok {
-		if !fd3ok {
-			log.Println("cannot receive both files stdin")
-			return errors.New("cannot receive both files stdin") // actually I could but it should force FULL mode
-		}
-		log.Println("bad file descriptor 4, using stdin for new data")
+	vrb("start scomm")
+	vrb("skipLines", skipLines)
+	vrb("keyParam", keyParam)
+	vrb("payloadParam", payloadParam)
+	vrb("dataDelim", dataDelim)
+	vrb("batchSize", batchSize)
+	vrb("extraFile1", extraFile1)
+	vrb("discard5", discard5)
+	vrb("discard6", discard6)
+	vrb("discard7", discard7)
+	vrb("discard8", discard8)
+
+	if keyParam != "" && payloadParam == "" && keyParam == "" && payloadParam != "" {
+		log.Println("need both key / payload parameters or none")
+		return errors.New("need both key / payload parameters or none")
 	}
 
-	if !discardNew {
-		file5, fd5ok = GetFDFile(5, "newDataOut")
-		if fd5ok {
-			log.Println("using file descriptor 5 for NEW output data")
-		} else {
-			log.Println("bad file descriptor 5, do not use for NEW output data")
-			file5 = os.Stdout
-			cntOnStdout++
-			file5stdout = true
+	useKey = true
+
+	keyPos, err := parseList(keyParam)
+
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	// payloadPos, err := parseList(payloadParam)
+
+	// if err != nil {
+	// 	log.Println(err)
+	// 	return err
+	// }
+
+	// works with files only, no "Real" process substitution :((
+	file3, fd3ok = GetFDFile(3, "file1DataIn")
+	if !fd3ok {
+		log.Println("bad file descriptor 3")
+		return errors.New("bad file descriptor 3")
+	}
+
+	file4, fd4ok = GetFDFile(4, "file2DataIn")
+	if !fd4ok {
+		log.Println("bad file descriptor 4")
+		return errors.New("bad file descriptor 4")
+	}
+
+	if !discard5 {
+		file5, fd5ok = GetFDFile(5, "file1DataOut")
+		if !fd5ok {
+			log.Println("bad file descriptor 5")
+			return errors.New("bad file descriptor 5")
 		}
 	}
-	if !discardOld {
-		file6, fd6ok = GetFDFile(6, "oldDataOut")
-		if fd6ok {
-			log.Println("using file descriptor 6 for OLD output data")
-		} else {
-			log.Println("bad file descriptor 6, do not use for OLD output data")
-			file6 = os.Stdout
-			cntOnStdout++
-			file6stdout = true
+
+	if !discard6 {
+		file6, fd6ok = GetFDFile(6, "file2DataOut")
+		if !fd6ok {
+			log.Println("bad file descriptor 6")
+			return errors.New("bad file descriptor 6")
 		}
 	}
-	if !discardCommon {
+
+	if !discard7 {
 		file7, fd7ok = GetFDFile(7, "commonDataOut")
-		if fd7ok {
-			log.Println("using file descriptor 7 for COMMON output data")
-		} else {
-			log.Println("bad file descriptor 7, do not use for COMMON output data")
-			file7 = os.Stdout
-			cntOnStdout++
-			file7stdout = true
+		if !fd7ok {
+			log.Println("bad file descriptor 7")
+			errors.New("bad file descriptor 7")
 		}
 	}
-	if cntOnStdout >= 2 && outputDelim == "" {
-		log.Println("need output delimiter if 2 or more outputs use stdout")
-		return errors.New("need output delimiter if 2 or more outputs use stdout")
+
+	if extraFile1 && discard8 {
+		log.Println("extra output requested for FILE1 data and discarded at the same time")
+		return errors.New("extra output requested for FILE1 data and discarded at the same time")
+	}
+	if !extraFile1 && discard8 {
+		log.Println("extra output not requested for FILE1 data but discard requested")
+		return errors.New("extra output not requested for FILE1 data but discard requested")
+	}
+	if extraFile1 && !discard8 {
+		//  normal if extra requested
+		file8, fd8ok = GetFDFile(8, "file1DataOutExtra")
+		if !fd8ok {
+			log.Println("bad file descriptor 8")
+			return errors.New("bad file descriptor 8")
+		}
+	}
+	if !extraFile1 && !discard8 {
+		// do not display this data
+		fd8ok = false
 	}
 
 	batchMode := batchSize > 0
@@ -322,11 +359,11 @@ func Scomm(
 
 	vrb("allocate memory")
 	if batchMode {
-		linesOld = make(map[string]struct{}, batchSize)
-		linesNew = make(map[string]struct{}, 2*int(batchSize/100)) // I expect 1-2% tags to be new or updated
+		linesFile1 = make(map[string]struct{}, batchSize)
+		linesFile2 = make(map[string]struct{}, 2*int(batchSize/100)) // I expect 1-2% tags to be new or updated
 	} else {
-		linesOld = make(map[string]struct{})
-		linesNew = make(map[string]struct{})
+		linesFile1 = make(map[string]struct{})
+		linesFile2 = make(map[string]struct{})
 	}
 	newKeysList = make(map[string]struct{})
 
@@ -359,133 +396,134 @@ func Scomm(
 	}
 
 	if batchMode {
+		/*
+			for { // read from OLD and NEW alternatively until both are done
+				// TODO the FULL mode should be included in the BATCH mode as a special case
 
-		for { // read from OLD and NEW alternatively until both are done
-			// TODO the FULL mode should be included in the BATCH mode as a special case
-
-			// read batchSize lines from OLD
-			for sc3.Scan() {
-				line = sc3.Text()
-				cntLinesOld++
-				linesOld[line] = struct{}{}
-				if cntLinesOld%2_000_000 == 0 {
-					vrb("read 2M old tags, total", cntLinesOld)
+				// read batchSize lines from OLD
+				for sc3.Scan() {
+					line = sc3.Text()
+					cntLinesFile1++
+					linesFile1[line] = struct{}{}
+					if cntLinesFile1%2_000_000 == 0 {
+						vrb("read 2M old tags, total", cntLinesFile1)
+					}
+					if cntLinesFile1%batchSize == 0 {
+						break
+					}
 				}
-				if cntLinesOld%batchSize == 0 {
+
+				if err := sc3.Err(); err != nil {
+					log.Println("failed reading old lines:", err)
+					return fmt.Errorf("failed reading old lines: %v", err)
+				}
+				log.Println("read", cntLinesFile1, "old lines")
+				log.Println("old lines", len(linesFile1), "new lines", len(linesFile2), "matched lines", cntSameLines)
+
+				// check existing linesNew, read in previous loop and not matched
+				for line, _ := range linesFile2 {
+					_, found := linesFile1[line]
+
+					if found { // same line exists in OLD, delete from OLD and do not add to NEW
+						cntSameLines++
+						delete(linesFile1, line)
+						delete(linesFile2, line)
+						if !discardCommon {
+							if _, err := file7.WriteString(line + "\n"); err != nil {
+								log.Println("failed to write common line", err)
+								return fmt.Errorf("failed to write common line: %v", err)
+							}
+						}
+					}
+				}
+				log.Println("old buffer", len(linesFile1), "new buffer", len(linesFile2), "matched so far", cntSameLines)
+
+				// read batchSize lines from NEW, and check against linesOld
+				for sc4.Scan() {
+					line = sc4.Text()
+					cntLinesFile2++ // keep a count of lines read regardless if they existed in OLD
+					if cntLinesFile2%2_000_000 == 0 {
+						vrb("read 2M new lines, total", cntLinesFile2)
+					}
+
+					_, found := linesFile1[line]
+
+					if found { // same line exists in OLD, delete from OLD and do not add to NEW
+						cntSameLines++
+						delete(linesFile1, line)
+						if !discardCommon {
+							if _, err := file7.WriteString(line + "\n"); err != nil {
+								log.Println("failed to write common line", err)
+								return fmt.Errorf("failed to write common line: %v", err)
+							}
+						}
+					} else { // line does not exist in OLD, add to NEW
+						linesFile2[line] = struct{}{}
+						if keyParam != "" {
+							keyval, err := getCompoundField(line, keyPos, dataDelim)
+							if err != nil {
+								return err
+							}
+							newKeysList[keyval] = struct{}{}
+						}
+					}
+					if cntLinesFile2%batchSize == 0 {
+						break
+					}
+				}
+
+				if err := sc4.Err(); err != nil {
+					log.Println("failed reading from old file:", err)
+					return fmt.Errorf("failed reading from old file: %v", err)
+				}
+
+				log.Println("read", cntLinesFile2, "new lines")
+				log.Println("old buffer", len(linesFile1), "new buffer", len(linesFile2), "matched", cntSameLines)
+
+				if cntLinesFile1%batchSize != 0 && cntLinesFile2%batchSize != 0 {
 					break
 				}
-			}
+			} // read from OLD and NEW alternatively until both are done
 
-			if err := sc3.Err(); err != nil {
-				log.Println("failed reading old lines:", err)
-				return fmt.Errorf("failed reading old lines: %v", err)
-			}
-			log.Println("read", cntLinesOld, "old lines")
-			log.Println("old lines", len(linesOld), "new lines", len(linesNew), "matched lines", cntSameLines)
-
-			// check existing linesNew, read in previous loop and not matched
-			for line, _ := range linesNew {
-				_, found := linesOld[line]
-
-				if found { // same line exists in OLD, delete from OLD and do not add to NEW
-					cntSameLines++
-					delete(linesOld, line)
-					delete(linesNew, line)
-					if !discardCommon {
-						if _, err := file7.WriteString(line + "\n"); err != nil {
-							log.Println("failed to write common line", err)
-							return fmt.Errorf("failed to write common line: %v", err)
-						}
-					}
-				}
-			}
-			log.Println("old buffer", len(linesOld), "new buffer", len(linesNew), "matched so far", cntSameLines)
-
-			// read batchSize lines from NEW, and check against linesOld
-			for sc4.Scan() {
-				line = sc4.Text()
-				cntLinesNew++ // keep a count of lines read regardless if they existed in OLD
-				if cntLinesNew%2_000_000 == 0 {
-					vrb("read 2M new lines, total", cntLinesNew)
-				}
-
-				_, found := linesOld[line]
-
-				if found { // same line exists in OLD, delete from OLD and do not add to NEW
-					cntSameLines++
-					delete(linesOld, line)
-					if !discardCommon {
-						if _, err := file7.WriteString(line + "\n"); err != nil {
-							log.Println("failed to write common line", err)
-							return fmt.Errorf("failed to write common line: %v", err)
-						}
-					}
-				} else { // line does not exist in OLD, add to NEW
-					linesNew[line] = struct{}{}
-					if keyParam != "" {
-						keyval, err := getCompoundField(line, keyPos, dataDelim)
-						if err != nil {
-							return err
-						}
-						newKeysList[keyval] = struct{}{}
-					}
-				}
-				if cntLinesNew%batchSize == 0 {
-					break
-				}
-			}
-
-			if err := sc4.Err(); err != nil {
-				log.Println("failed reading from old file:", err)
-				return fmt.Errorf("failed reading from old file: %v", err)
-			}
-
-			log.Println("read", cntLinesNew, "new lines")
-			log.Println("old buffer", len(linesOld), "new buffer", len(linesNew), "matched", cntSameLines)
-
-			if cntLinesOld%batchSize != 0 && cntLinesNew%batchSize != 0 {
-				break
-			}
-		} // read from OLD and NEW alternatively until both are done
-
-		log.Println("read", cntLinesOld, "old lines,", cntLinesNew, "new lines,", cntSameLines, "matched,", cntNewLines, "preserved,")
-
+			log.Println("read", cntLinesFile1, "old lines,", cntLinesFile2, "new lines,", cntSameLines, "matched,", cntNewLines, "preserved,")
+		*/
 	} else { // full mode
+		// TODO include this logic in the batch mode and make batch mode default
 
-		// read all OLD lines
+		// read all FILE1 lines
 
 		for sc3.Scan() {
 			line = sc3.Text()
-			cntLinesOld++
-			linesOld[line] = struct{}{}
-			if cntLinesOld%2_000_000 == 0 {
-				vrb("read 2M old lines, total", cntLinesOld)
+			cntLinesFile1++
+			linesFile1[line] = struct{}{}
+			if cntLinesFile1%2_000_000 == 0 {
+				vrb("read 2M old lines, total", cntLinesFile1)
 			}
 		}
 
 		if err := sc3.Err(); err != nil {
-			log.Println("failed reading old lines:", err)
-			return fmt.Errorf("failed reading old lines: %v", err)
+			log.Println("failed reading FD3:", err)
+			return fmt.Errorf("failed reading FD3: %v", err)
 		}
 
-		log.Println("read", cntLinesOld, "old lines,", len(linesOld), "are unique")
+		log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1), "are unique")
 
-		// read all NEW lines
+		// read all FILE2 lines
 
 		for sc4.Scan() {
 			line = sc4.Text()
-			cntLinesNew++ // keep a count of lines read regardless if they existed in OLD
-			if cntLinesNew%2_000_000 == 0 {
-				vrb("read 2M new lines, total", cntLinesNew)
-				vrb("old lines", len(linesOld), "new lines", len(linesNew), "matched lines", cntSameLines)
+			cntLinesFile2++ // keep a count of lines read regardless if they existed in OLD
+			if cntLinesFile2%2_000_000 == 0 {
+				vrb("read 2M file2 lines, total", cntLinesFile2)
+				vrb("file1 lines", len(linesFile1), "file2 lines", len(linesFile2), "matched lines", cntSameLines)
 			}
 
-			_, found := linesOld[line]
+			_, found := linesFile1[line]
 
 			if found { // same line exists in OLD, delete from OLD and do not add to NEW
 				cntSameLines++
-				delete(linesOld, line)
-				if !discardCommon {
+				delete(linesFile1, line)
+				if !discard7 {
 					if _, err := file7.WriteString(line + "\n"); err != nil {
 						log.Println("failed to write common line", err)
 						return fmt.Errorf("failed to write common line: %v", err)
@@ -493,23 +531,24 @@ func Scomm(
 				}
 			} else { // line does not exist in OLD, add to NEW
 				cntNewLines++
-				linesNew[line] = struct{}{}
-				if keyParam != "" {
-					keyval, err := getCompoundField(line, keyPos, dataDelim)
-					if err != nil {
-						return err
-					}
-					newKeysList[keyval] = struct{}{}
+				linesFile2[line] = struct{}{}
+
+				if useKey {
+					// 	keyval, err := getCompoundField(line, keyPos, dataDelim)
+					// 	if err != nil {
+					// 		return err
+					// 	}
+					// 	newKeysList[keyval] = struct{}{}
 				}
 			}
 		}
 
 		if err := sc4.Err(); err != nil {
-			log.Println("failed reading new lines:", err)
-			return fmt.Errorf("failed reading new lines: %v", err)
+			log.Println("failed reading FD4:", err)
+			return fmt.Errorf("failed reading FD4: %v", err)
 		}
 
-		log.Println("read", cntLinesOld, "old lines", cntLinesNew, "new lines,", cntSameLines, "matched,", cntNewLines, "preserved")
+		log.Println("read", cntLinesFile1, "old lines", cntLinesFile2, "new lines,", cntSameLines, "matched,", cntNewLines, "preserved")
 
 	} /////////////////////////////////////////////////////////////////// batch mode / full mode
 
@@ -521,7 +560,7 @@ func Scomm(
 
 		log.Println("searching for new and updated keys")
 
-		for line, _ := range linesOld {
+		for line, _ := range linesFile1 {
 			keyval, err := getCompoundField(line, keyPos, dataDelim)
 			if err != nil {
 				return err
@@ -529,57 +568,37 @@ func Scomm(
 			_, found := newKeysList[keyval]
 			if found { // same key exists in NEW and OLD so something was changed, delete from OLD, keep in NEW
 				updatedTags++
-				delete(linesOld, line)
+				delete(linesFile1, line)
 			}
 		}
 	}
 
 	s := fmt.Sprintf("new and updated lines: %d (%.2f%%), deleted lines: %d (%.2f%%)\n",
-		len(linesNew), float64(len(linesNew))*100/float64(cntLinesOld),
-		len(linesOld), float64(len(linesOld))*100/float64(cntLinesOld))
+		len(linesFile2), float64(len(linesFile2))*100/float64(cntLinesFile1),
+		len(linesFile1), float64(len(linesFile1))*100/float64(cntLinesFile1))
 	log.Println(s)
 
-	if file7stdout && (file5stdout || file6stdout) { // NEW or OLD will come after COMMON on stdout
-		file7.WriteString(outputDelim + "\n")
+	done := make(chan error)
+
+	go func() {
+		done <- writeNewData()
+	}()
+
+	go func() {
+		done <- writeOldData()
+	}()
+
+	err1 := <-done
+	err2 := <-done
+
+	if err1 != nil {
+		log.Println(err1)
+		return err1
 	}
 
-	if file5stdout && file6stdout {
-		// TODO do not parallelize this if they both go to stdout
-
-		if err := writeNewData(); err != nil {
-			// log.Println(err)
-			return err
-		}
-
-		file5.WriteString(outputDelim + "\n")
-
-		if err := writeOldData(); err != nil {
-			// log.Println(err)
-			return err
-		}
-	} else {
-		done := make(chan error)
-
-		go func() {
-			done <- writeNewData()
-		}()
-
-		go func() {
-			done <- writeOldData()
-		}()
-
-		err1 := <-done
-		err2 := <-done
-
-		if err1 != nil {
-			log.Println(err1)
-			return err1
-		}
-
-		if err2 != nil {
-			log.Println(err2)
-			return err2
-		}
+	if err2 != nil {
+		log.Println(err2)
+		return err2
 	}
 
 	ts2 := time.Now()
@@ -595,7 +614,7 @@ func Scomm(
 
 func writeNewData() error {
 	log.Println("write newDataOut")
-	for str, _ := range linesNew {
+	for str, _ := range linesFile2 {
 		_, err := file5.WriteString(str + "\n")
 		if err != nil {
 			log.Println("failed to write to new data output:", err)
@@ -608,7 +627,7 @@ func writeNewData() error {
 
 func writeOldData() error {
 	log.Println("write old data output")
-	for str, _ := range linesOld {
+	for str, _ := range linesFile1 {
 		_, err := file6.WriteString(str + "\n")
 		if err != nil {
 			log.Println("failed to write to old data output:", err)
@@ -620,7 +639,7 @@ func writeOldData() error {
 }
 
 func vrb(params ...interface{}) {
-	if Verbose {
+	if gverbose {
 		log.Println(params...)
 	}
 }
@@ -638,12 +657,13 @@ func dbg(params ...interface{}) {
 func GetFDFile(fd int, name string) (*os.File, bool) {
 	f := os.NewFile(uintptr(fd), name)
 	if f == nil {
-		log.Println("invalid fd", fd, name)
+		log.Println("invalid FD", fd, name)
 		return f, false
 	}
-	_, err := f.Stat()
-	if err != nil {
-		log.Println("cannot stat fd", fd, name)
-	}
-	return f, err == nil
+	// _, err := f.Stat()
+	// if err != nil {
+	// log.Println("cannot stat fd", fd, name)
+	// }
+	// return f, err == nil
+	return f, true
 }
