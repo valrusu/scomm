@@ -8,23 +8,50 @@ package scomm
 // FILE1 from FD3
 // FILE2 from DF4
 
-// OUTPUT: without -k/-p                     with -k/-p/
-// FD5: lines unique to FILE1                FILE1 lines for which key(file1) does not exist in FILE2, or key exists
+// Example OUTPUT: without -k/-p             with -k/-p/
+// FD5: lines unique to FILE1
 // FD6: lines unique to FILE2
 // FD7: lines common                         lines common
 //                                           FILE1 lines for which key(file1) exists in FILE2 but payloads are different
-// example without k/p:
-// 111   111   111 common FD7
-//       222   222 new FD6
-// 333         333 old FD5
-
-// with k/p: treat the inputs as this is the "only" info I care about in a line; but I need original line output :(
-// example with k/p:
-//  111 22222 33333333     111 22222 33333333      111 22222 33333333 FD7
-//  111 22222 33333333     111 22222 44444444      111 22222 44444444 FD7
-//  111 22222 33333333     111 33333 22222222      111 33333 22222222 FD6 update   111 22222 33333333 FD8 delete (option)
-//                         444 22222 33333333      444 22222 33333333 FD6 insert
-//  555 22222 33333333                             555 22222 33333333 FD5 delete
+//
+// the output is meant like either "merge + delete" (no -e) or "delete + insert" (with -e)
+// I could change -e to -m for merge and reverse its logic
+//
+// Example OUTPUT: without -k/-p; ignore -f -e
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE FFFFFFFF FD5 (only in file1)   DDD EEEEE GGGGGGGG FD6 (only in file2)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH IIIII JJJJJJJJ FD5 (only in file1)   HHH KKKKK LLLLLLLL FD6 (only in file2)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1)
+//
+// Example OUTPUT: with -k/-p, with -f, without -e
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG FD7 (same k+p)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL FD6 (same k, diff p: merge)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2: merge)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1: delete)
+//
+// Example OUTPUT: with -k/-p, with -f, with -e
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG FD7 (same k+p)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL FD6 (same k, diff p: insert)   HHH IIIII JJJJJJJJ FD5 (delete)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2: insert)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1: delete)
+//
+// Example OUTPUT: with -k/-p, without -f, without -e
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB FD7 (same k+p)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE FD7 (same k+p)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK FD6 (same k, diff p: merge)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN FD6 (only in file2: merge)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ FD5 (only in file1: delete)
+//
+// Example OUTPUT: with -k/-p, without -f, with -e
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB FD7 (same k+p)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE FD7 (same k+p)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK FD6 (same k, diff p: insert)   HHH IIIII FD5 (delete)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN FD6 (only in file2: insert)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ FD5 (only in file1: delete)
+//
 
 import (
 	"bufio"
@@ -43,7 +70,7 @@ var (
 	linesFile1                                                           map[string]struct{}
 	linesFile2                                                           map[string]struct{}
 	newKeysList                                                          map[string]struct{}
-	file3, file4, file5, file6, file7, file8                             *os.File
+	file3, file4, file5, file6, file7                                    *os.File
 	gverbose                                                             bool
 )
 
@@ -229,14 +256,14 @@ func Scomm(
 	dataDelim string,
 	batchSize int,
 	extraFile1 bool,
-	discard5, discard6, discard7, discard8, discard9 bool,
+	discard5, discard6, discard7 bool,
 ) error {
 
 	var (
-		fd3ok, fd4ok, fd5ok, fd6ok, fd7ok, fd8ok bool
-		line                                     string
-		sc3, sc4                                 *bufio.Scanner
-		useKey                                   bool
+		fd3ok, fd4ok, fd5ok, fd6ok, fd7ok bool
+		line                              string
+		sc3, sc4                          *bufio.Scanner
+		useKey                            bool
 	)
 
 	log.SetFlags(log.Ldate | log.Ltime)
@@ -264,7 +291,6 @@ func Scomm(
 	vrb("discard5", discard5)
 	vrb("discard6", discard6)
 	vrb("discard7", discard7)
-	vrb("discard8", discard8)
 
 	if keyParam != "" && payloadParam == "" && keyParam == "" && payloadParam != "" {
 		log.Println("need both key / payload parameters or none")
@@ -280,12 +306,12 @@ func Scomm(
 		return err
 	}
 
-	payloadPos, err := parseList(payloadParam)
+	// payloadPos, err := parseList(payloadParam)
 
-	if err != nil {
-		log.Println(err)
-		return err
-	}
+	// if err != nil {
+	// 	log.Println(err)
+	// 	return err
+	// }
 
 	// works with files only, no "Real" process substitution :((
 	file3, fd3ok = GetFDFile(3, "file1DataIn")
@@ -322,27 +348,6 @@ func Scomm(
 			log.Println("bad file descriptor 7")
 			errors.New("bad file descriptor 7")
 		}
-	}
-
-	if extraFile1 && discard8 {
-		log.Println("extra output requested for FILE1 data and discarded at the same time")
-		return errors.New("extra output requested for FILE1 data and discarded at the same time")
-	}
-	if !extraFile1 && discard8 {
-		log.Println("extra output not requested for FILE1 data but discard requested")
-		return errors.New("extra output not requested for FILE1 data but discard requested")
-	}
-	if extraFile1 && !discard8 {
-		//  normal if extra requested
-		file8, fd8ok = GetFDFile(8, "file1DataOutExtra")
-		if !fd8ok {
-			log.Println("bad file descriptor 8")
-			return errors.New("bad file descriptor 8")
-		}
-	}
-	if !extraFile1 && !discard8 {
-		// do not display this data
-		fd8ok = false
 	}
 
 	batchMode := batchSize > 0

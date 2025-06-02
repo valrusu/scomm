@@ -18,10 +18,11 @@ import (
 func main() {
 
 	var (
-		verbose                           bool
-		headerLines, batchSize            int
-		keyParam, payloadParam, delimiter string
-		noCommon, noOld, noNew            bool
+		verbose                               bool
+		headerLines, batchSize                int
+		keyParam, payloadParam, delimiter     string
+		noCommon, noFile1, noFile2, fullLines bool
+		extraFile1                            bool
 	)
 
 	// get all parameters; parse them here and pass parsed slices to scomm?
@@ -38,33 +39,22 @@ func main() {
 	flag.StringVar(&payloadParam, "p", "", "payload parameter not used currently")
 	flag.StringVar(&delimiter, "d", "", "use delimited mode for KEY and PAYLOAD values, without it use fixed length fields")
 	flag.IntVar(&batchSize, "b", 0, "batch size for reading input files")
-	flag.BoolVar(&noCommon, "c", false, "discard common lines, otherwise output them on file descriptor 7 if specified, or stdout if not specified")
-	flag.BoolVar(&noOld, "o", false, "discard lines only in the old file, otherwise output them on file descriptor 6 if specified, or stdout if not specified")
-	flag.BoolVar(&noNew, "n", false, "discard lines only in the new file, otherwise output them on file descriptor 5 if specified, or stdout if not specified")
+	flag.BoolVar(&extraFile1, "e", false, "extra info from FILE1 for data matching FILE2")
+	flag.BoolVar(&noCommon, "c", false, "discard common lines, otherwise output them on file descriptor 7 if specified")
+	flag.BoolVar(&noFile1, "1", false, "discard lines only in FILE1 , otherwise output them on file descriptor 6")
+	flag.BoolVar(&noFile2, "2", false, "discard lines only in FILE2 , otherwise output them on file descriptor 5")
+	flag.BoolVar(&fullLines, "f", false, "If -k/-pa are used, then output full lines, otherwise just the KEY/PAYLOAD fields")
 	flag.Parse()
 
-	// params:
-	// -v verbose: extra log output on stderr
-	// -H skipLines: number of lines to skip from each input
-	// -k keyParam: string defining the key, can be a list
-	// -p PayloadParam: string defining the key payloads, can be a list - not sure this is used and how NOT USED
-	// -d delimiter: empty for position-based, char (or string?) for separated fields
-	// -b batchSize: 0 forces full mode; why? scomm should run by default in batch mode with a default batch size
-	// -x with -k/-p display the FILE1 lines with same key in FILE2 but payload different on FD8; ignore without -k/-p
-	// -5 discard output on corresponding FD
-	// -6
-	// -7
-	// -8
-
 	if err := scomm.Scomm(
-		true,                              // verbose bool,
-		1,                                 // skipLines int,
-		"1,2",                             // keyParam string,
-		"",                                // payloadParam string, -- not used yet
-		",",                               // delimiter string,
-		0,                                 // batchSize int,
-		true,                              // extra output from FILE1 on FD8
-		false, false, false, false, false, // discard old new common
+		true,                // verbose bool,
+		1,                   // skipLines int,
+		"1,2",               // keyParam string,
+		"",                  // payloadParam string, -- not used yet
+		",",                 // delimiter string,
+		0,                   // batchSize int,
+		false,               // extra info from file 1
+		false, false, false, // discard 5 6 7
 	); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
