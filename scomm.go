@@ -574,6 +574,18 @@ func keySearchFullOutput() error {
 	return nil
 }
 
+func lineSearchBatch() error {
+	return nil
+}
+
+func keySearchPayloadOutputBatch() error {
+	return nil
+}
+
+func keySearchFullOutputBatch() error {
+	return nil
+}
+
 ///////////////////////////////////////////////////
 
 // scomm reads lines from 2 files or pipes and outputs the lines which are common, the ones in first file only and the ones in the second file only
@@ -739,7 +751,15 @@ func Scomm(
 	}
 
 	if batchMode {
-
+		if useKey {
+			if fullLineOut {
+				keySearchFullOutputBatch()
+			} else {
+				keySearchPayloadOutputBatch()
+			}
+		} else {
+			lineSearchBatch()
+		}
 	} else {
 		if useKey {
 			if fullLineOut {
@@ -844,178 +864,7 @@ func Scomm(
 
 			log.Println("read", cntLinesFile1, "old lines,", cntLinesFile2, "new lines,", cntSameLines, "matched,", cntNewLines, "preserved,")
 		*/
-	} else { // full mode
-		/*
-			// TODO include this logic in the batch mode and make batch mode default
-
-			// read all FILE1 lines
-
-			for sc3.Scan() {
-				line = sc3.Text()
-				cntLinesFile1++
-
-				if cntLinesFile1%2_000_000 == 0 {
-					vrb("read 2M lines from file1, total", cntLinesFile1)
-				}
-
-				// store the file1 data
-				if useKey {
-					k1, err := getCompoundFieldValue(line, keyPos, dataDelim)
-					if err != nil {
-						log.Println(err)
-						return err
-					}
-
-					p1, err := getCompoundFieldValue(line, payloadPos, dataDelim)
-					if err != nil {
-						log.Println(err)
-						return err
-					}
-
-					if fullLineOut {
-						linesFile1F[k1] = lineParts{payLoad: p1, line: line}
-					} else {
-						linesFile1F[k1] = lineParts{payLoad: p1}
-					}
-				} else {
-					linesFile1F[line] = lineParts{}
-				}
-
-			}
-
-			if err := sc3.Err(); err != nil {
-				log.Println("failed reading FD3:", err)
-				return fmt.Errorf("failed reading FD3: %v", err)
-			}
-
-			log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1F), "are unique")
-
-			// read all FILE2 lines
-
-			for sc4.Scan() {
-				line = sc4.Text()
-				cntLinesFile2++ // keep a count of lines read regardless if they existed in FILE1
-
-				if cntLinesFile2%2_000_000 == 0 {
-					vrb("read 2M lines from file2, total", cntLinesFile2)
-					vrb("file1 lines", len(linesFile1F), "file2 lines", len(linesFile2F), "matched lines", cntSameLines)
-				}
-
-				if useKey {
-					k2, err := getCompoundFieldValue(line, keyPos, dataDelim)
-					if err != nil {
-						log.Println(err)
-						return err
-					}
-
-					p2, err := getCompoundFieldValue(line, payloadPos, dataDelim)
-					if err != nil {
-						log.Println(err)
-						return err
-					}
-
-					lp1, found := linesFile1F[k2]
-
-					if found {
-						if p2 == lp1.payLoad { // key found and payload same
-							cntSameLines++
-							delete(linesFile1F, k2)
-							if fullLineOut {
-								if !discard7 {
-									if _, err := file7.WriteString(line + "\n"); err != nil {
-										log.Println("failed to write to FD7:", err)
-										return fmt.Errorf("failed to write to FD7: %v", err)
-									}
-								}
-							} else {
-								if !discard7 {
-									if _, err := file7.WriteString(k2 + dataDelim + p2 + "\n"); err != nil {
-										log.Println("failed to write to FD7:", err)
-										return fmt.Errorf("failed to write to FD7: %v", err)
-									}
-								}
-							}
-						} else { // key found and payload diff
-							cntNewLines++
-							linesFile2F[k2] = lineParts{payLoad: p2, line: line}
-							if outModeMerge {
-								delete(linesFile1F, k2)
-							}
-						}
-					} else {
-						cntNewLines++
-						linesFile2F[k2] = lineParts{payLoad: p2, line: line}
-					}
-				} else {
-					_, found = linesFile1F[line]
-
-					if found { // same line exists in FILE1, delete from FILE1 and do not add to FILE2
-						cntSameLines++
-						delete(linesFile1F, line)
-						if !discard7 {
-							if _, err := file7.WriteString(line + "\n"); err != nil {
-								log.Println("failed to write to FD7:", err)
-								return fmt.Errorf("failed to write to FD7: %v", err)
-							}
-						}
-					} else { // line does not exist in OLD, add to NEW
-						cntNewLines++
-						linesFile2F[line] = lineParts{}
-					}
-				}
-			}
-
-			if err := sc4.Err(); err != nil {
-				log.Println("failed reading FD4:", err)
-				return fmt.Errorf("failed reading FD4: %v", err)
-			}
-
-			log.Println("read", cntLinesFile1, "old lines", cntLinesFile2, "new lines,", cntSameLines, "matched,", cntNewLines, "preserved")
-		*/
 	} /////////////////////////////////////////////////////////////////// batch mode / full mode
-
-	// I dont think I need to search again from file1 to file2
-	// if useKey {
-	// 	vrb("searching for new and updated keys")
-
-	// 	for key, lp1 := range linesFile1 {
-
-	// 		_, found := newKeysList[keyval]
-	// 		if found { // same key exists in NEW and OLD so something was changed, delete from OLD, keep in NEW
-	// 			updatedTags++
-	// 			delete(linesFile1, line)
-	// 		}
-	// 	}
-	// } else {
-	// 	// TODO rewrite this with file1/file2
-	// 	s := fmt.Sprintf("new and updated lines: %d (%.2f%%), deleted lines: %d (%.2f%%)\n",
-	// 		len(linesFile2), float64(len(linesFile2))*100/float64(cntLinesFile1),
-	// 		len(linesFile1), float64(len(linesFile1))*100/float64(cntLinesFile1))
-	// 	log.Println(s)
-	// }
-
-	// done := make(chan error)
-
-	// go func() {
-	// 	done <- writeFile2Data()
-	// }()
-
-	// go func() {
-	// 	done <- writeFile1Data()
-	// }()
-
-	// err1 := <-done
-	// err2 := <-done
-
-	// if err1 != nil {
-	// 	log.Println(err1)
-	// 	return err1
-	// }
-
-	// if err2 != nil {
-	// 	log.Println(err2)
-	// 	return err2
-	// }
 
 	ts2 := time.Now()
 	// if profile {
