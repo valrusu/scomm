@@ -65,13 +65,28 @@ import (
 	"time"
 )
 
+type lineParts struct {
+	payLoad, line string
+}
+
 var (
 	cntLinesFile1, cntLinesFile2, cntSameLines, cntNewLines, updatedTags int
-	linesFile1                                                           map[string]struct{}
-	linesFile2                                                           map[string]struct{}
-	newKeysList                                                          map[string]struct{}
-	file3, file4, file5, file6, file7                                    *os.File
-	gverbose                                                             bool
+
+	linesFile1P                       map[string]string // used for key compare, key+payload output
+	linesFile2P                       map[string]string
+	linesFile1F                       map[string]lineParts // used for key compare, full line output
+	linesFile2F                       map[string]lineParts
+	linesFile1L                       map[string]struct{} // used for line compare, full line output
+	linesFile2L                       map[string]struct{}
+	file3, file4, file5, file6, file7 *os.File
+	verbose                           bool
+	useKey, fullLineOut, outModeMerge bool
+	keyPos, payloadPos                [][2]int
+	dataDelim                         string
+
+	fd3ok, fd4ok, fd5ok, fd6ok, fd7ok bool
+	sc3, sc4                          *bufio.Scanner
+	discard5, discard6, discard7      bool
 )
 
 // TODO I dont think this is used anymore since KEY is also compound
@@ -189,7 +204,7 @@ func parseList(param string) ([][2]int, error) {
 }
 
 // getCompundField returns data from a line, based on the field definition
-func getCompoundField(line string, pos [][2]int, delim string) (string, error) {
+func getCompoundFieldValue(line string, pos [][2]int, delim string) (string, error) {
 	var s string
 
 	if delim == "" { // position-based
@@ -245,31 +260,348 @@ func getCompoundField(line string, pos [][2]int, delim string) (string, error) {
 	}
 }
 
+func lineSearch() error {
+	vrb("lineSearch: allocate memory")
+	linesFile1L = make(map[string]struct{})
+	linesFile2L = make(map[string]struct{})
+
+	for sc3.Scan() {
+		line := sc3.Text()
+		cntLinesFile1++
+
+		if cntLinesFile1%2_000_000 == 0 {
+			vrb("read 2M lines from file1, total", cntLinesFile1)
+		}
+
+		linesFile1L[line] = struct{}{}
+	}
+
+	if err := sc3.Err(); err != nil {
+		log.Println("failed reading FD3:", err)
+		return fmt.Errorf("failed reading FD3: %v", err)
+	}
+
+	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1F), "are unique")
+
+	for sc4.Scan() {
+		line := sc4.Text()
+		cntLinesFile2++ // keep a count of lines read regardless if they existed in FILE1
+
+		if cntLinesFile2%2_000_000 == 0 {
+			vrb("read 2M lines from file2, total", cntLinesFile2)
+			vrb("file1 lines", len(linesFile1F), "file2 lines", len(linesFile2F), "matched lines", cntSameLines)
+		}
+
+		_, found := linesFile1L[line]
+
+		if found {
+			cntSameLines++
+			delete(linesFile1L, line)
+
+			if !discard7 {
+				if _, err := file7.WriteString(line + "\n"); err != nil {
+					log.Println("failed to write to FD7:", err)
+					return fmt.Errorf("failed to write to FD7: %v", err)
+				}
+			}
+		} else {
+			cntNewLines++
+			linesFile2L[line] = struct{}{}
+		}
+	}
+
+	if err := sc4.Err(); err != nil {
+		log.Println("failed reading FD4:", err)
+		return fmt.Errorf("failed reading FD4: %v", err)
+	}
+
+	log.Println("read", cntLinesFile1, "file1 lines", cntLinesFile2, "file2 lines,")
+	log.Println(cntSameLines, "matched,", len(linesFile1L), "file1 preserved", cntNewLines, "file2 preserved")
+
+	done := make(chan error)
+
+	go func() {
+		done <- writeFile2DataL()
+	}()
+
+	go func() {
+		done <- writeFile1DataL()
+	}()
+
+	err1 := <-done
+	err2 := <-done
+
+	if err1 != nil {
+		log.Println(err1)
+		return err1
+	}
+
+	if err2 != nil {
+		log.Println(err2)
+		return err2
+	}
+
+	return nil
+}
+
+func keySearchPayloadOutput() error {
+	vrb("keySearchPayloadOutput: allocate memory")
+	linesFile1P = make(map[string]string)
+	linesFile2P = make(map[string]string)
+
+	for sc3.Scan() {
+		line := sc3.Text()
+		cntLinesFile1++
+
+		if cntLinesFile1%2_000_000 == 0 {
+			vrb("read 2M lines from file1, total", cntLinesFile1)
+		}
+
+		k1, err := getCompoundFieldValue(line, keyPos, dataDelim)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		p1, err := getCompoundFieldValue(line, payloadPos, dataDelim)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		linesFile1P[k1] = p1
+	}
+
+	if err := sc3.Err(); err != nil {
+		log.Println("failed reading FD3:", err)
+		return fmt.Errorf("failed reading FD3: %v", err)
+	}
+
+	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1P), "are unique")
+
+	for sc4.Scan() {
+		line := sc4.Text()
+		cntLinesFile2++ // keep a count of lines read regardless if they existed in FILE1
+
+		if cntLinesFile2%2_000_000 == 0 {
+			vrb("read 2M lines from file2, total", cntLinesFile2)
+			vrb("file1 lines", len(linesFile1P), "file2 lines", len(linesFile2F), "matched lines", cntSameLines)
+		}
+
+		k2, err := getCompoundFieldValue(line, keyPos, dataDelim)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		p2, err := getCompoundFieldValue(line, payloadPos, dataDelim)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		p1, found := linesFile1P[k2]
+
+		if found { // key found in file1
+			if p2 == p1 { // key found and payload same
+				cntSameLines++
+				delete(linesFile1P, k2)
+				if !discard7 {
+					if _, err := file7.WriteString(k2 + dataDelim + p2 + "\n"); err != nil {
+						log.Println("failed to write to FD7:", err)
+						return fmt.Errorf("failed to write to FD7: %v", err)
+					}
+				}
+			} else { // key found and payload diff
+				cntNewLines++
+				linesFile2P[k2] = p2
+				if outModeMerge { // dont write deletes
+					vrb("delete linesFile1P", k2)
+					delete(linesFile1P, k2)
+				}
+			}
+		} else {
+			cntNewLines++
+			linesFile2P[k2] = p2
+		}
+	}
+
+	if err := sc4.Err(); err != nil {
+		log.Println("failed reading FD4:", err)
+		return fmt.Errorf("failed reading FD4: %v", err)
+	}
+
+	log.Println("read", cntLinesFile1, "file1 lines", cntLinesFile2, "file2 lines,")
+	log.Println(cntSameLines, "matched,", len(linesFile1L), "file1 preserved", cntNewLines, "file2 preserved")
+
+	done := make(chan error)
+
+	go func() {
+		done <- writeFile2DataP()
+	}()
+
+	go func() {
+		done <- writeFile1DataP()
+	}()
+
+	err1 := <-done
+	err2 := <-done
+
+	if err1 != nil {
+		log.Println(err1)
+		return err1
+	}
+
+	if err2 != nil {
+		log.Println(err2)
+		return err2
+	}
+
+	return nil
+}
+
+func keySearchFullOutput() error {
+	vrb("keySearchFullOutput: allocate memory")
+	linesFile1F = make(map[string]lineParts)
+	linesFile2F = make(map[string]lineParts)
+
+	for sc3.Scan() {
+		line := sc3.Text()
+		cntLinesFile1++
+
+		if cntLinesFile1%2_000_000 == 0 {
+			vrb("read 2M lines from file1, total", cntLinesFile1)
+		}
+
+		k1, err := getCompoundFieldValue(line, keyPos, dataDelim)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		p1, err := getCompoundFieldValue(line, payloadPos, dataDelim)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		linesFile1F[k1] = lineParts{payLoad: p1, line: line}
+	}
+
+	if err := sc3.Err(); err != nil {
+		log.Println("failed reading FD3:", err)
+		return fmt.Errorf("failed reading FD3: %v", err)
+	}
+
+	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1F), "are unique")
+
+	for sc4.Scan() {
+		line := sc4.Text()
+		cntLinesFile2++ // keep a count of lines read regardless if they existed in FILE1
+
+		if cntLinesFile2%2_000_000 == 0 {
+			vrb("read 2M lines from file2, total", cntLinesFile2)
+			vrb("file1 lines", len(linesFile1F), "file2 lines", len(linesFile2F), "matched lines", cntSameLines)
+		}
+
+		k2, err := getCompoundFieldValue(line, keyPos, dataDelim)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		p2, err := getCompoundFieldValue(line, payloadPos, dataDelim)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		lp1, found := linesFile1F[k2]
+
+		if found { // key found in file1
+			if p2 == lp1.payLoad { // key found and payload same
+				cntSameLines++
+				delete(linesFile1F, k2)
+				if !discard7 {
+					if _, err := file7.WriteString(line + "\n"); err != nil {
+						log.Println("failed to write to FD7:", err)
+						return fmt.Errorf("failed to write to FD7: %v", err)
+					}
+				}
+			} else { // key found and payload diff
+				cntNewLines++
+				linesFile2F[k2] = lineParts{payLoad: p2, line: line}
+				if outModeMerge { // dont write deletes
+					delete(linesFile1F, k2)
+				}
+			}
+		} else {
+			cntNewLines++
+			linesFile2F[k2] = lineParts{payLoad: p2, line: line}
+		}
+	}
+
+	if err := sc4.Err(); err != nil {
+		log.Println("failed reading FD4:", err)
+		return fmt.Errorf("failed reading FD4: %v", err)
+	}
+
+	log.Println("read", cntLinesFile1, "file1 lines", cntLinesFile2, "file2 lines,")
+	log.Println(cntSameLines, "matched,", len(linesFile1L), "file1 preserved", cntNewLines, "file2 preserved")
+
+	done := make(chan error)
+
+	go func() {
+		done <- writeFile2DataF()
+	}()
+
+	go func() {
+		done <- writeFile1DataF()
+	}()
+
+	err1 := <-done
+	err2 := <-done
+
+	if err1 != nil {
+		log.Println(err1)
+		return err1
+	}
+
+	if err2 != nil {
+		log.Println(err2)
+		return err2
+	}
+
+	return nil
+}
+
 ///////////////////////////////////////////////////
 
 // scomm reads lines from 2 files or pipes and outputs the lines which are common, the ones in first file only and the ones in the second file only
 func Scomm(
-	verbose bool,
+	verboseParam bool,
 	skipLines int,
 	keyParam string,
 	payloadParam string,
-	dataDelim string,
-	batchSize int,
-	extraFile1 bool,
-	discard5, discard6, discard7 bool,
+	dataDelimParam string,
+	batchSizeParam int,
+	outModeMergeParam bool,
+	fullLineOutParam bool,
+	discard5Param, discard6Param, discard7Param bool,
 ) error {
 
-	var (
-		fd3ok, fd4ok, fd5ok, fd6ok, fd7ok bool
-		line                              string
-		sc3, sc4                          *bufio.Scanner
-		useKey                            bool
-	)
+	var err error
 
 	log.SetFlags(log.Ldate | log.Ltime)
 	log.Println("Start Scomm")
 
-	gverbose = verbose
+	verbose = verboseParam
+	dataDelim = dataDelimParam
+	fullLineOut = fullLineOutParam
+	discard5 = discard5Param
+	discard6 = discard6Param
+	discard7 = discard7Param
+	outModeMerge = outModeMergeParam
 
 	ts1 := time.Now()
 	// if profile {
@@ -283,11 +615,11 @@ func Scomm(
 
 	vrb("start scomm")
 	vrb("skipLines", skipLines)
-	vrb("keyParam", keyParam)
-	vrb("payloadParam", payloadParam)
-	vrb("dataDelim", dataDelim)
-	vrb("batchSize", batchSize)
-	vrb("extraFile1", extraFile1)
+	vrb("key", keyParam)
+	vrb("payload", payloadParam)
+	vrb("dataDelim", dataDelimParam)
+	vrb("batchSize", batchSizeParam)
+	vrb("outModeMerge", outModeMergeParam)
 	vrb("discard5", discard5)
 	vrb("discard6", discard6)
 	vrb("discard7", discard7)
@@ -296,24 +628,28 @@ func Scomm(
 		log.Println("need both key / payload parameters or none")
 		return errors.New("need both key / payload parameters or none")
 	}
-
-	useKey = true
-
-	keyPos, err := parseList(keyParam)
-
-	if err != nil {
-		log.Println(err)
-		return err
+	if keyParam == "" && payloadParam == "" {
+		useKey = false
+	} else {
+		useKey = true
 	}
 
-	// payloadPos, err := parseList(payloadParam)
+	if useKey {
+		keyPos, err = parseList(keyParam)
 
-	// if err != nil {
-	// 	log.Println(err)
-	// 	return err
-	// }
+		if err != nil {
+			log.Println(err)
+			return err
+		}
 
-	// works with files only, no "Real" process substitution :((
+		payloadPos, err = parseList(payloadParam)
+
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+	}
+
 	file3, fd3ok = GetFDFile(3, "file1DataIn")
 	if !fd3ok {
 		log.Println("bad file descriptor 3")
@@ -350,30 +686,33 @@ func Scomm(
 		}
 	}
 
-	batchMode := batchSize > 0
-	if fd3ok {
-		sc3 = bufio.NewScanner(file3)
-	} else {
-		sc3 = bufio.NewScanner(os.Stdin)
-	}
-	if fd4ok {
-		sc4 = bufio.NewScanner(file4)
-	} else {
-		sc4 = bufio.NewScanner(os.Stdin)
-	}
+	batchMode := batchSizeParam > 0
+	// if fd3ok {
+	sc3 = bufio.NewScanner(file3)
+	// } else {
+	// sc3 = bufio.NewScanner(os.Stdin)
+	// cnt++
+	// }
+	// if fd4ok {
+	sc4 = bufio.NewScanner(file4)
+	// } else {
+	// sc4 = bufio.NewScanner(os.Stdin)
+	// cnt++
+	// }
 
-	vrb("allocate memory")
-	if batchMode {
-		linesFile1 = make(map[string]struct{}, batchSize)
-		linesFile2 = make(map[string]struct{}, 2*int(batchSize/100)) // I expect 1-2% tags to be new or updated
-	} else {
-		linesFile1 = make(map[string]struct{})
-		linesFile2 = make(map[string]struct{})
-	}
-	newKeysList = make(map[string]struct{})
+	// if cnt > 1 {
+	// 	// more than one input on stdin, not good for now
+	// 	log.Println("only one stream can use stdin")
+	// 	return errors.New("only one stream can use stdin")
+	// }
+	// cnt = 0
+
+	// if batchMode {
+	// linesFile1F = make(map[string]lineParts, batchSizeParam)
+	// linesFile2F = make(map[string]lineParts, 2*int(batchSizeParam/100)) // I expect 1-2% tags to be new or updated
 
 	if batchMode {
-		log.Println("start processing in batch mode, size", batchSize)
+		log.Println("start processing in batch mode, size", batchSizeParam)
 	} else {
 		log.Println("start processing in full mode")
 	}
@@ -382,21 +721,35 @@ func Scomm(
 	if skipLines > 0 {
 		for i := 1; i <= skipLines; i++ {
 			if sc3.Scan() {
-				log.Println("ignoring old data header line", sc3.Text())
+				log.Println("ignoring file1 header", sc3.Text())
 			} else {
 				// unable to even read one line, and header was specified - problem
-				log.Println("unable to read old header line")
-				return errors.New("unable to read old header line")
+				log.Println("unable to read file1 header")
+				return errors.New("unable to read file1 header")
 			}
 		}
 		for i := 1; i <= skipLines; i++ {
 			if sc4.Scan() {
-				log.Println("ignoring new data header line", sc4.Text())
+				log.Println("ignoring file2 header", sc4.Text())
 			} else {
 				// unable to even read one line, and header was specified - problem
-				log.Println("unable to read new header line")
-				return errors.New("unable to read new header line")
+				log.Println("unable to read file2 header")
+				return errors.New("unable to read file2 header")
 			}
+		}
+	}
+
+	if batchMode {
+
+	} else {
+		if useKey {
+			if fullLineOut {
+				keySearchFullOutput()
+			} else {
+				keySearchPayloadOutput()
+			}
+		} else {
+			lineSearch()
 		}
 	}
 
@@ -493,118 +846,177 @@ func Scomm(
 			log.Println("read", cntLinesFile1, "old lines,", cntLinesFile2, "new lines,", cntSameLines, "matched,", cntNewLines, "preserved,")
 		*/
 	} else { // full mode
-		// TODO include this logic in the batch mode and make batch mode default
+		/*
+			// TODO include this logic in the batch mode and make batch mode default
 
-		// read all FILE1 lines
+			// read all FILE1 lines
 
-		for sc3.Scan() {
-			line = sc3.Text()
-			cntLinesFile1++
-			linesFile1[line] = struct{}{}
-			if cntLinesFile1%2_000_000 == 0 {
-				vrb("read 2M old lines, total", cntLinesFile1)
-			}
-		}
+			for sc3.Scan() {
+				line = sc3.Text()
+				cntLinesFile1++
 
-		if err := sc3.Err(); err != nil {
-			log.Println("failed reading FD3:", err)
-			return fmt.Errorf("failed reading FD3: %v", err)
-		}
-
-		log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1), "are unique")
-
-		// read all FILE2 lines
-
-		for sc4.Scan() {
-			line = sc4.Text()
-			cntLinesFile2++ // keep a count of lines read regardless if they existed in OLD
-			if cntLinesFile2%2_000_000 == 0 {
-				vrb("read 2M file2 lines, total", cntLinesFile2)
-				vrb("file1 lines", len(linesFile1), "file2 lines", len(linesFile2), "matched lines", cntSameLines)
-			}
-
-			_, found := linesFile1[line]
-
-			if found { // same line exists in OLD, delete from OLD and do not add to NEW
-				cntSameLines++
-				delete(linesFile1, line)
-				if !discard7 {
-					if _, err := file7.WriteString(line + "\n"); err != nil {
-						log.Println("failed to write common line", err)
-						return fmt.Errorf("failed to write common line: %v", err)
-					}
+				if cntLinesFile1%2_000_000 == 0 {
+					vrb("read 2M lines from file1, total", cntLinesFile1)
 				}
-			} else { // line does not exist in OLD, add to NEW
-				cntNewLines++
-				linesFile2[line] = struct{}{}
+
+				// store the file1 data
+				if useKey {
+					k1, err := getCompoundFieldValue(line, keyPos, dataDelim)
+					if err != nil {
+						log.Println(err)
+						return err
+					}
+
+					p1, err := getCompoundFieldValue(line, payloadPos, dataDelim)
+					if err != nil {
+						log.Println(err)
+						return err
+					}
+
+					if fullLineOut {
+						linesFile1F[k1] = lineParts{payLoad: p1, line: line}
+					} else {
+						linesFile1F[k1] = lineParts{payLoad: p1}
+					}
+				} else {
+					linesFile1F[line] = lineParts{}
+				}
+
+			}
+
+			if err := sc3.Err(); err != nil {
+				log.Println("failed reading FD3:", err)
+				return fmt.Errorf("failed reading FD3: %v", err)
+			}
+
+			log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1F), "are unique")
+
+			// read all FILE2 lines
+
+			for sc4.Scan() {
+				line = sc4.Text()
+				cntLinesFile2++ // keep a count of lines read regardless if they existed in FILE1
+
+				if cntLinesFile2%2_000_000 == 0 {
+					vrb("read 2M lines from file2, total", cntLinesFile2)
+					vrb("file1 lines", len(linesFile1F), "file2 lines", len(linesFile2F), "matched lines", cntSameLines)
+				}
 
 				if useKey {
-					// 	keyval, err := getCompoundField(line, keyPos, dataDelim)
-					// 	if err != nil {
-					// 		return err
-					// 	}
-					// 	newKeysList[keyval] = struct{}{}
+					k2, err := getCompoundFieldValue(line, keyPos, dataDelim)
+					if err != nil {
+						log.Println(err)
+						return err
+					}
+
+					p2, err := getCompoundFieldValue(line, payloadPos, dataDelim)
+					if err != nil {
+						log.Println(err)
+						return err
+					}
+
+					lp1, found := linesFile1F[k2]
+
+					if found {
+						if p2 == lp1.payLoad { // key found and payload same
+							cntSameLines++
+							delete(linesFile1F, k2)
+							if fullLineOut {
+								if !discard7 {
+									if _, err := file7.WriteString(line + "\n"); err != nil {
+										log.Println("failed to write to FD7:", err)
+										return fmt.Errorf("failed to write to FD7: %v", err)
+									}
+								}
+							} else {
+								if !discard7 {
+									if _, err := file7.WriteString(k2 + dataDelim + p2 + "\n"); err != nil {
+										log.Println("failed to write to FD7:", err)
+										return fmt.Errorf("failed to write to FD7: %v", err)
+									}
+								}
+							}
+						} else { // key found and payload diff
+							cntNewLines++
+							linesFile2F[k2] = lineParts{payLoad: p2, line: line}
+							if outModeMerge {
+								delete(linesFile1F, k2)
+							}
+						}
+					} else {
+						cntNewLines++
+						linesFile2F[k2] = lineParts{payLoad: p2, line: line}
+					}
+				} else {
+					_, found = linesFile1F[line]
+
+					if found { // same line exists in FILE1, delete from FILE1 and do not add to FILE2
+						cntSameLines++
+						delete(linesFile1F, line)
+						if !discard7 {
+							if _, err := file7.WriteString(line + "\n"); err != nil {
+								log.Println("failed to write to FD7:", err)
+								return fmt.Errorf("failed to write to FD7: %v", err)
+							}
+						}
+					} else { // line does not exist in OLD, add to NEW
+						cntNewLines++
+						linesFile2F[line] = lineParts{}
+					}
 				}
 			}
-		}
 
-		if err := sc4.Err(); err != nil {
-			log.Println("failed reading FD4:", err)
-			return fmt.Errorf("failed reading FD4: %v", err)
-		}
+			if err := sc4.Err(); err != nil {
+				log.Println("failed reading FD4:", err)
+				return fmt.Errorf("failed reading FD4: %v", err)
+			}
 
-		log.Println("read", cntLinesFile1, "old lines", cntLinesFile2, "new lines,", cntSameLines, "matched,", cntNewLines, "preserved")
-
+			log.Println("read", cntLinesFile1, "old lines", cntLinesFile2, "new lines,", cntSameLines, "matched,", cntNewLines, "preserved")
+		*/
 	} /////////////////////////////////////////////////////////////////// batch mode / full mode
 
-	if keyParam != "" {
-		// looking now at agency+tag level
-		// tags in OLD that dont exist in NEW are deleted tags
-		// tags in NEW that dont exist in OLD are new tags
-		// tags in NEW that exist in OLD are UPDATED tags
+	// I dont think I need to search again from file1 to file2
+	// if useKey {
+	// 	vrb("searching for new and updated keys")
 
-		log.Println("searching for new and updated keys")
+	// 	for key, lp1 := range linesFile1 {
 
-		for line, _ := range linesFile1 {
-			keyval, err := getCompoundField(line, keyPos, dataDelim)
-			if err != nil {
-				return err
-			}
-			_, found := newKeysList[keyval]
-			if found { // same key exists in NEW and OLD so something was changed, delete from OLD, keep in NEW
-				updatedTags++
-				delete(linesFile1, line)
-			}
-		}
-	}
+	// 		_, found := newKeysList[keyval]
+	// 		if found { // same key exists in NEW and OLD so something was changed, delete from OLD, keep in NEW
+	// 			updatedTags++
+	// 			delete(linesFile1, line)
+	// 		}
+	// 	}
+	// } else {
+	// 	// TODO rewrite this with file1/file2
+	// 	s := fmt.Sprintf("new and updated lines: %d (%.2f%%), deleted lines: %d (%.2f%%)\n",
+	// 		len(linesFile2), float64(len(linesFile2))*100/float64(cntLinesFile1),
+	// 		len(linesFile1), float64(len(linesFile1))*100/float64(cntLinesFile1))
+	// 	log.Println(s)
+	// }
 
-	s := fmt.Sprintf("new and updated lines: %d (%.2f%%), deleted lines: %d (%.2f%%)\n",
-		len(linesFile2), float64(len(linesFile2))*100/float64(cntLinesFile1),
-		len(linesFile1), float64(len(linesFile1))*100/float64(cntLinesFile1))
-	log.Println(s)
+	// done := make(chan error)
 
-	done := make(chan error)
+	// go func() {
+	// 	done <- writeFile2Data()
+	// }()
 
-	go func() {
-		done <- writeNewData()
-	}()
+	// go func() {
+	// 	done <- writeFile1Data()
+	// }()
 
-	go func() {
-		done <- writeOldData()
-	}()
+	// err1 := <-done
+	// err2 := <-done
 
-	err1 := <-done
-	err2 := <-done
+	// if err1 != nil {
+	// 	log.Println(err1)
+	// 	return err1
+	// }
 
-	if err1 != nil {
-		log.Println(err1)
-		return err1
-	}
-
-	if err2 != nil {
-		log.Println(err2)
-		return err2
-	}
+	// if err2 != nil {
+	// 	log.Println(err2)
+	// 	return err2
+	// }
 
 	ts2 := time.Now()
 	// if profile {
@@ -615,36 +1027,86 @@ func Scomm(
 	return nil
 }
 
-/////////////
-
-func writeNewData() error {
-	log.Println("write newDataOut")
-	for str, _ := range linesFile2 {
-		_, err := file5.WriteString(str + "\n")
+func writeFile2DataP() error {
+	log.Println("write newFile2DataOut")
+	for k, p := range linesFile2P {
+		_, err := file6.WriteString(k + dataDelim + p + "\n")
 		if err != nil {
-			log.Println("failed to write to new data output:", err)
-			return fmt.Errorf("failed to write new data output: %v", err)
+			log.Println("failed to write to FD6:", err)
+			return fmt.Errorf("failed to write to FD6: %v", err)
 		}
 	}
-	log.Println("wrote new data output")
+	log.Println("wrote file2 data output")
 	return nil
 }
 
-func writeOldData() error {
-	log.Println("write old data output")
-	for str, _ := range linesFile1 {
-		_, err := file6.WriteString(str + "\n")
+func writeFile1DataP() error {
+	log.Println("write newFile1DataOut")
+	for k, p := range linesFile1P {
+		_, err := file5.WriteString(k + dataDelim + p + "\n")
 		if err != nil {
-			log.Println("failed to write to old data output:", err)
-			return fmt.Errorf("failed to write old data output: %v", err)
+			log.Println("failed to write to FD5:", err)
+			return fmt.Errorf("failed to write to FD5: %v", err)
 		}
 	}
-	log.Println("wrote old data output")
+	log.Println("wrote file1 data output")
+	return nil
+}
+
+func writeFile2DataL() error {
+	log.Println("write newFile2DataOut")
+	for line := range linesFile2L {
+		_, err := file6.WriteString(line + "\n")
+		if err != nil {
+			log.Println("failed to write to FD6:", err)
+			return fmt.Errorf("failed to write to FD6: %v", err)
+		}
+	}
+	log.Println("wrote file2 data output")
+	return nil
+}
+
+func writeFile1DataL() error {
+	log.Println("write newFile1DataOut")
+	for line := range linesFile1L {
+		_, err := file5.WriteString(line + "\n")
+		if err != nil {
+			log.Println("failed to write to FD5:", err)
+			return fmt.Errorf("failed to write to FD5: %v", err)
+		}
+	}
+	log.Println("wrote file1 data output")
+	return nil
+}
+
+func writeFile2DataF() error {
+	log.Println("write newFile2DataOut")
+	for _, lp := range linesFile2F {
+		_, err := file6.WriteString(lp.line + "\n")
+		if err != nil {
+			log.Println("failed to write to FD6:", err)
+			return fmt.Errorf("failed to write to FD6: %v", err)
+		}
+	}
+	log.Println("wrote file2 data output")
+	return nil
+}
+
+func writeFile1DataF() error {
+	log.Println("write newFile1DataOut")
+	for _, lp := range linesFile1F {
+		_, err := file5.WriteString(lp.line + "\n")
+		if err != nil {
+			log.Println("failed to write to FD5:", err)
+			return fmt.Errorf("failed to write to FD5: %v", err)
+		}
+	}
+	log.Println("wrote file1 data output")
 	return nil
 }
 
 func vrb(params ...interface{}) {
-	if gverbose {
+	if verbose {
 		log.Println(params...)
 	}
 }
@@ -659,6 +1121,8 @@ func dbg(params ...interface{}) {
 }
 
 // GetFDFile returns a file from a file descriptor and if it ok to use
+// works with files only, no "Real" process substitution :((
+// for now, I will get errors when I really read from the file, and will have to deal with them at that point
 func GetFDFile(fd int, name string) (*os.File, bool) {
 	f := os.NewFile(uintptr(fd), name)
 	if f == nil {

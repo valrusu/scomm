@@ -22,7 +22,7 @@ func main() {
 		headerLines, batchSize                int
 		keyParam, payloadParam, delimiter     string
 		noCommon, noFile1, noFile2, fullLines bool
-		extraFile1                            bool
+		outModeMerge                          bool
 	)
 
 	// get all parameters; parse them here and pass parsed slices to scomm?
@@ -39,22 +39,23 @@ func main() {
 	flag.StringVar(&payloadParam, "p", "", "payload parameter not used currently")
 	flag.StringVar(&delimiter, "d", "", "use delimited mode for KEY and PAYLOAD values, without it use fixed length fields")
 	flag.IntVar(&batchSize, "b", 0, "batch size for reading input files")
-	flag.BoolVar(&extraFile1, "e", false, "extra info from FILE1 for data matching FILE2")
-	flag.BoolVar(&noCommon, "c", false, "discard common lines, otherwise output them on file descriptor 7 if specified")
+	flag.BoolVar(&outModeMerge, "m", true, "extra info from FILE1 for data matching FILE2")
 	flag.BoolVar(&noFile1, "1", false, "discard lines only in FILE1 , otherwise output them on file descriptor 6")
 	flag.BoolVar(&noFile2, "2", false, "discard lines only in FILE2 , otherwise output them on file descriptor 5")
+	flag.BoolVar(&noCommon, "3", false, "discard common lines, otherwise output them on file descriptor 7 if specified")
 	flag.BoolVar(&fullLines, "f", false, "If -k/-pa are used, then output full lines, otherwise just the KEY/PAYLOAD fields")
 	flag.Parse()
 
 	if err := scomm.Scomm(
-		true,                // verbose bool,
-		1,                   // skipLines int,
-		"1,2",               // keyParam string,
-		"",                  // payloadParam string, -- not used yet
-		",",                 // delimiter string,
-		0,                   // batchSize int,
-		false,               // extra info from file 1
-		false, false, false, // discard 5 6 7
+		verbose,                    // verbose bool,
+		headerLines,                // skipLines int,
+		keyParam,                   // keyParam string,
+		payloadParam,               // payloadParam string, -- not used yet
+		delimiter,                  // delimiter string,
+		batchSize,                  // batchSize int,
+		outModeMerge,               // false: generate merge+delete; true: generate delete+insert
+		fullLines,                  // full lines output
+		noCommon, noFile1, noFile2, // discard 5 6 7
 	); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

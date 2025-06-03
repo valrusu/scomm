@@ -70,11 +70,11 @@ func TestParseList(t *testing.T) {
 }
 
 func TestVrb(t *testing.T) {
-	Verbose = true
+	verbose = true
 	vrb("test verbose")
 }
 
-func TestGetCompoundField(t *testing.T) {
+func TestGetCompoundFieldValue(t *testing.T) {
 	data := []struct {
 		line     string
 		pos      [][2]int
@@ -100,7 +100,7 @@ func TestGetCompoundField(t *testing.T) {
 
 	for _, val := range data {
 		fmt.Println("LINE:", val.line, "POS:", val.pos, "DELIM:", val.delim, "OK:", val.ok, "EXPECTED:", val.expected)
-		keyval, err := getCompoundField(val.line, val.pos, val.delim)
+		keyval, err := getCompoundFieldValue(val.line, val.pos, val.delim)
 		fmt.Println("RETURNED:", keyval, "ERR:", err)
 		switch {
 		case val.ok && err == nil && keyval == val.expected: // expected to succeed, succeeded and value is correct
