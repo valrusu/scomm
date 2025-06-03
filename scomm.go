@@ -17,38 +17,38 @@ package scomm
 // the output is meant like either "merge + delete" (no -e) or "delete + insert" (with -e)
 // I could change -e to -m for merge and reverse its logic
 //
-// Example OUTPUT: without -k/-p; ignore -f -e
+// Example OUTPUT: without -k/-p; ignore -f -e (all defaults):n
 //  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
 //  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE FFFFFFFF FD5 (only in file1)   DDD EEEEE GGGGGGGG FD6 (only in file2)
 //  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH IIIII JJJJJJJJ FD5 (only in file1)   HHH KKKKK LLLLLLLL FD6 (only in file2)
 //                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2)
 //  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1)
 //
-// Example OUTPUT: with -k/-p, with -f, without -e
-//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
-//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG FD7 (same k+p)
-//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL FD6 (same k, diff p: merge)
-//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2: merge)
-//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1: delete)
-//
-// Example OUTPUT: with -k/-p, with -f, with -e
+// Example OUTPUT: with -k/-p, with -f, without -m (delete+insert)
 //  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
 //  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG FD7 (same k+p)
 //  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL FD6 (same k, diff p: insert)   HHH IIIII JJJJJJJJ FD5 (delete)
 //                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2: insert)
 //  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1: delete)
 //
-// Example OUTPUT: with -k/-p, without -f, without -e
+// Example OUTPUT: with -k/-p, with -f, with -m (merge+delete)
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG FD7 (same k+p)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL FD6 (same k, diff p: merge)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2: merge)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1: delete)
+//
+// Example OUTPUT: with -k/-p, without -f, without -m (delete+insert)
 //  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB FD7 (same k+p)
 //  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE FD7 (same k+p)
-//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK FD6 (same k, diff p: merge)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK FD6 (same k, diff p: merge)    HHH IIIII FD5 (delete)
 //                         MMM NNNNN OOOOOOOO      MMM NNNNN FD6 (only in file2: merge)
 //  PPP QQQQQ RRRRRRRR                             PPP QQQQQ FD5 (only in file1: delete)
 //
-// Example OUTPUT: with -k/-p, without -f, with -e
+// Example OUTPUT: with -k/-p, without -f, with -m (merge+delete) (-k/-p + defaults)
 //  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB FD7 (same k+p)
 //  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE FD7 (same k+p)
-//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK FD6 (same k, diff p: insert)   HHH IIIII FD5 (delete)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK FD6 (same k, diff p: insert)
 //                         MMM NNNNN OOOOOOOO      MMM NNNNN FD6 (only in file2: insert)
 //  PPP QQQQQ RRRRRRRR                             PPP QQQQQ FD5 (only in file1: delete)
 //
@@ -72,10 +72,10 @@ type lineParts struct {
 var (
 	cntLinesFile1, cntLinesFile2, cntSameLines, cntNewLines, updatedTags int
 
-	linesFile1P                       map[string]string // used for key compare, key+payload output
-	linesFile2P                       map[string]string
-	linesFile1F                       map[string]lineParts // used for key compare, full line output
-	linesFile2F                       map[string]lineParts
+	linesFile1KP                      map[string]string // used for key compare, key+payload output
+	linesFile2KP                      map[string]string
+	linesFile1KLP                     map[string]lineParts // used for key compare, full line output
+	linesFile2KLP                     map[string]lineParts
 	linesFile1L                       map[string]struct{} // used for line compare, full line output
 	linesFile2L                       map[string]struct{}
 	file3, file4, file5, file6, file7 *os.File
@@ -281,7 +281,7 @@ func lineSearch() error {
 		return fmt.Errorf("failed reading FD3: %v", err)
 	}
 
-	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1F), "are unique")
+	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1KLP), "are unique")
 
 	for sc4.Scan() {
 		line := sc4.Text()
@@ -289,7 +289,7 @@ func lineSearch() error {
 
 		if cntLinesFile2%2_000_000 == 0 {
 			vrb("read 2M lines from file2, total", cntLinesFile2)
-			vrb("file1 lines", len(linesFile1F), "file2 lines", len(linesFile2F), "matched lines", cntSameLines)
+			vrb("file1 lines", len(linesFile1KLP), "file2 lines", len(linesFile2KLP), "matched lines", cntSameLines)
 		}
 
 		_, found := linesFile1L[line]
@@ -346,8 +346,8 @@ func lineSearch() error {
 
 func keySearchPayloadOutput() error {
 	vrb("keySearchPayloadOutput: allocate memory")
-	linesFile1P = make(map[string]string)
-	linesFile2P = make(map[string]string)
+	linesFile1KP = make(map[string]string)
+	linesFile2KP = make(map[string]string)
 
 	for sc3.Scan() {
 		line := sc3.Text()
@@ -369,7 +369,7 @@ func keySearchPayloadOutput() error {
 			return err
 		}
 
-		linesFile1P[k1] = p1
+		linesFile1KP[k1] = p1
 	}
 
 	if err := sc3.Err(); err != nil {
@@ -377,7 +377,7 @@ func keySearchPayloadOutput() error {
 		return fmt.Errorf("failed reading FD3: %v", err)
 	}
 
-	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1P), "are unique")
+	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1KP), "are unique")
 
 	for sc4.Scan() {
 		line := sc4.Text()
@@ -385,7 +385,7 @@ func keySearchPayloadOutput() error {
 
 		if cntLinesFile2%2_000_000 == 0 {
 			vrb("read 2M lines from file2, total", cntLinesFile2)
-			vrb("file1 lines", len(linesFile1P), "file2 lines", len(linesFile2F), "matched lines", cntSameLines)
+			vrb("file1 lines", len(linesFile1KP), "file2 lines", len(linesFile2KLP), "matched lines", cntSameLines)
 		}
 
 		k2, err := getCompoundFieldValue(line, keyPos, dataDelim)
@@ -400,12 +400,12 @@ func keySearchPayloadOutput() error {
 			return err
 		}
 
-		p1, found := linesFile1P[k2]
+		p1, found := linesFile1KP[k2]
 
 		if found { // key found in file1
-			if p2 == p1 { // key found and payload same
+			if p1 == p2 { // key found and payload same
 				cntSameLines++
-				delete(linesFile1P, k2)
+				delete(linesFile1KP, k2)
 				if !discard7 {
 					if _, err := file7.WriteString(k2 + dataDelim + p2 + "\n"); err != nil {
 						log.Println("failed to write to FD7:", err)
@@ -414,15 +414,14 @@ func keySearchPayloadOutput() error {
 				}
 			} else { // key found and payload diff
 				cntNewLines++
-				linesFile2P[k2] = p2
+				linesFile2KP[k2] = p2
 				if outModeMerge { // dont write deletes
-					vrb("delete linesFile1P", k2)
-					delete(linesFile1P, k2)
+					delete(linesFile1KP, k2)
 				}
 			}
-		} else {
+		} else { // key not found
 			cntNewLines++
-			linesFile2P[k2] = p2
+			linesFile2KP[k2] = p2
 		}
 	}
 
@@ -437,11 +436,11 @@ func keySearchPayloadOutput() error {
 	done := make(chan error)
 
 	go func() {
-		done <- writeFile2DataP()
+		done <- writeFile2DataKP()
 	}()
 
 	go func() {
-		done <- writeFile1DataP()
+		done <- writeFile1DataKP()
 	}()
 
 	err1 := <-done
@@ -462,8 +461,8 @@ func keySearchPayloadOutput() error {
 
 func keySearchFullOutput() error {
 	vrb("keySearchFullOutput: allocate memory")
-	linesFile1F = make(map[string]lineParts)
-	linesFile2F = make(map[string]lineParts)
+	linesFile1KLP = make(map[string]lineParts)
+	linesFile2KLP = make(map[string]lineParts)
 
 	for sc3.Scan() {
 		line := sc3.Text()
@@ -485,7 +484,7 @@ func keySearchFullOutput() error {
 			return err
 		}
 
-		linesFile1F[k1] = lineParts{payLoad: p1, line: line}
+		linesFile1KLP[k1] = lineParts{payLoad: p1, line: line}
 	}
 
 	if err := sc3.Err(); err != nil {
@@ -493,7 +492,7 @@ func keySearchFullOutput() error {
 		return fmt.Errorf("failed reading FD3: %v", err)
 	}
 
-	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1F), "are unique")
+	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1KLP), "are unique")
 
 	for sc4.Scan() {
 		line := sc4.Text()
@@ -501,7 +500,7 @@ func keySearchFullOutput() error {
 
 		if cntLinesFile2%2_000_000 == 0 {
 			vrb("read 2M lines from file2, total", cntLinesFile2)
-			vrb("file1 lines", len(linesFile1F), "file2 lines", len(linesFile2F), "matched lines", cntSameLines)
+			vrb("file1 lines", len(linesFile1KLP), "file2 lines", len(linesFile2KLP), "matched lines", cntSameLines)
 		}
 
 		k2, err := getCompoundFieldValue(line, keyPos, dataDelim)
@@ -516,12 +515,12 @@ func keySearchFullOutput() error {
 			return err
 		}
 
-		lp1, found := linesFile1F[k2]
+		lp1, found := linesFile1KLP[k2]
 
 		if found { // key found in file1
 			if p2 == lp1.payLoad { // key found and payload same
 				cntSameLines++
-				delete(linesFile1F, k2)
+				delete(linesFile1KLP, k2)
 				if !discard7 {
 					if _, err := file7.WriteString(line + "\n"); err != nil {
 						log.Println("failed to write to FD7:", err)
@@ -530,14 +529,14 @@ func keySearchFullOutput() error {
 				}
 			} else { // key found and payload diff
 				cntNewLines++
-				linesFile2F[k2] = lineParts{payLoad: p2, line: line}
+				linesFile2KLP[k2] = lineParts{payLoad: p2, line: line}
 				if outModeMerge { // dont write deletes
-					delete(linesFile1F, k2)
+					delete(linesFile1KLP, k2)
 				}
 			}
 		} else {
 			cntNewLines++
-			linesFile2F[k2] = lineParts{payLoad: p2, line: line}
+			linesFile2KLP[k2] = lineParts{payLoad: p2, line: line}
 		}
 	}
 
@@ -1027,9 +1026,9 @@ func Scomm(
 	return nil
 }
 
-func writeFile2DataP() error {
+func writeFile2DataKP() error {
 	log.Println("write newFile2DataOut")
-	for k, p := range linesFile2P {
+	for k, p := range linesFile2KP {
 		_, err := file6.WriteString(k + dataDelim + p + "\n")
 		if err != nil {
 			log.Println("failed to write to FD6:", err)
@@ -1040,9 +1039,9 @@ func writeFile2DataP() error {
 	return nil
 }
 
-func writeFile1DataP() error {
+func writeFile1DataKP() error {
 	log.Println("write newFile1DataOut")
-	for k, p := range linesFile1P {
+	for k, p := range linesFile1KP {
 		_, err := file5.WriteString(k + dataDelim + p + "\n")
 		if err != nil {
 			log.Println("failed to write to FD5:", err)
@@ -1081,7 +1080,7 @@ func writeFile1DataL() error {
 
 func writeFile2DataF() error {
 	log.Println("write newFile2DataOut")
-	for _, lp := range linesFile2F {
+	for _, lp := range linesFile2KLP {
 		_, err := file6.WriteString(lp.line + "\n")
 		if err != nil {
 			log.Println("failed to write to FD6:", err)
@@ -1094,7 +1093,7 @@ func writeFile2DataF() error {
 
 func writeFile1DataF() error {
 	log.Println("write newFile1DataOut")
-	for _, lp := range linesFile1F {
+	for _, lp := range linesFile1KLP {
 		_, err := file5.WriteString(lp.line + "\n")
 		if err != nil {
 			log.Println("failed to write to FD5:", err)
