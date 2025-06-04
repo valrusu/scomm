@@ -220,7 +220,7 @@ func getCompoundFieldValue(line string, pos [][2]int, delim string) (string, err
 			} else {
 				y = min(v[1], len(line))
 			}
-			dbg(x, y)
+			// dbg(x, y)
 			// if y > len(line) {
 			// 	log.Println("invalid data: " + line)
 			// 	os.Exit(1)
