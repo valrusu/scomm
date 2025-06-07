@@ -24,19 +24,12 @@ package scomm
 //                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2)
 //  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1)
 //
-// Example OUTPUT: with -k/-p, with -f, without -m (delete+insert)
-//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
-//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG FD7 (same k+p)
-//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL FD6 (same k, diff p: insert)   HHH IIIII JJJJJJJJ FD5 (delete)
-//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2: insert)
-//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1: delete)
-//
-// Example OUTPUT: with -k/-p, with -f, with -m (merge+delete)
-//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
-//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG FD7 (same k+p)
-//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL FD6 (same k, diff p: merge)
-//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2: merge)
-//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1: delete)
+// Example OUTPUT: with -k/-p, without -f, with -m (merge+delete) (-k/-p + defaults)
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB FD7 (same k+p)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE FD7 (same k+p)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK FD6 (same k, diff p: insert)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN FD6 (only in file2: insert)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ FD5 (only in file1: delete)
 //
 // Example OUTPUT: with -k/-p, without -f, without -m (delete+insert)
 //  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB FD7 (same k+p)
@@ -45,12 +38,19 @@ package scomm
 //                         MMM NNNNN OOOOOOOO      MMM NNNNN FD6 (only in file2: merge)
 //  PPP QQQQQ RRRRRRRR                             PPP QQQQQ FD5 (only in file1: delete)
 //
-// Example OUTPUT: with -k/-p, without -f, with -m (merge+delete) (-k/-p + defaults)
-//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB FD7 (same k+p)
-//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE FD7 (same k+p)
-//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK FD6 (same k, diff p: insert)
-//                         MMM NNNNN OOOOOOOO      MMM NNNNN FD6 (only in file2: insert)
-//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ FD5 (only in file1: delete)
+// Example OUTPUT: with -k/-p, with -f, with -m (merge+delete)
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG FD7 (same k+p, display G because of how I search)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL FD6 (same k, diff p: merge)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2: merge)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1: delete)
+//
+// Example OUTPUT: with -k/-p, with -f, without -m (delete+insert)
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG FD7 (same k+p, display G because of how I search)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL FD6 (same k, diff p: insert)   HHH IIIII JJJJJJJJ FD5 (delete)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2: insert)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1: delete)
 //
 
 import (

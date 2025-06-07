@@ -33,17 +33,17 @@ func main() {
 	// }
 
 	flag.BoolVar(&verbose, "v", false, "bool; verbose mode")
-	flag.IntVar(&headerLines, "H", 0, "int; number header lines, which will be skipped")
-	flag.StringVar(&keyParam, "k", "", "key field definition; without -d use fixed length fields (like cut -c), with -d use a field,list (like cut -f)")
+	flag.IntVar(&headerLines, "H", 0, "int; number header lines, which will be skipped, default none")
+	flag.StringVar(&keyParam, "k", "", "list of key field definition; without -d use fixed length fields, with -d use a field,list; LIST")
 	// flag.StringVar(&tagParam, "t", "5-14", "tag field definition; without -d use a fixed length fields, with -d use a field,list")
-	flag.StringVar(&payloadParam, "p", "", "payload parameter not used currently")
+	flag.StringVar(&payloadParam, "p", "", "payload: the interesting data associated with the key; LIST")
 	flag.StringVar(&delimiter, "d", "", "use delimited mode for KEY and PAYLOAD values, without it use fixed length fields")
 	flag.IntVar(&batchSize, "b", 0, "batch size for reading input files")
-	flag.BoolVar(&outModeMerge, "m", true, "extra info from FILE1 for data matching FILE2")
+	flag.BoolVar(&outModeMerge, "m", true, "extra info from FILE1 for data matching the key only from FILE2")
 	flag.BoolVar(&noFile1, "1", false, "discard lines only in FILE1 , otherwise output them on file descriptor 6")
 	flag.BoolVar(&noFile2, "2", false, "discard lines only in FILE2 , otherwise output them on file descriptor 5")
 	flag.BoolVar(&noCommon, "3", false, "discard common lines, otherwise output them on file descriptor 7 if specified")
-	flag.BoolVar(&fullLines, "f", false, "If -k/-pa are used, then output full lines, otherwise just the KEY/PAYLOAD fields")
+	flag.BoolVar(&fullLines, "f", false, "If -k/-p are used, then output full lines, otherwise just the KEY/PAYLOAD fields, deefault false")
 	flag.Parse()
 
 	if err := scomm.Scomm(
