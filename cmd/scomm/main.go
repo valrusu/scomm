@@ -43,7 +43,7 @@ func main() {
 	flag.BoolVar(&noFile1, "1", false, "discard lines only in FILE1 , otherwise output them on file descriptor 6")
 	flag.BoolVar(&noFile2, "2", false, "discard lines only in FILE2 , otherwise output them on file descriptor 5")
 	flag.BoolVar(&noCommon, "3", false, "discard common lines, otherwise output them on file descriptor 7 if specified")
-	flag.BoolVar(&fullLines, "f", false, "If -k/-p are used, then output full lines, otherwise just the KEY/PAYLOAD fields, deefault false")
+	flag.BoolVar(&fullLines, "f", false, "If -k/-p are used, then output full lines, otherwise just the KEY/PAYLOAD fields, default false")
 	flag.Parse()
 
 	if err := scomm.Scomm(
@@ -55,7 +55,7 @@ func main() {
 		batchSize,                  // batchSize int,
 		outModeMerge,               // false: generate merge+delete; true: generate delete+insert
 		fullLines,                  // full lines output
-		noCommon, noFile1, noFile2, // discard 5 6 7
+		noFile1, noFile2, noCommon, // discard 5 6 7
 	); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
