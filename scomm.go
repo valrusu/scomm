@@ -292,7 +292,17 @@ func lineSearch() error {
 
 		if cntLinesFile2%2_000_000 == 0 {
 			vrb("read 2M lines from file2, total", cntLinesFile2)
-			vrb("file1", len(linesFile1L), "file2", len(linesFile2L), "matched", cntSameLines, percentage(cntSameLines, len(linesFile2L)))
+			// loop stats
+			log.Println(
+				"file1 read", cntLinesFile1,
+				"buffered", len(linesFile1L),
+				percentage(len(linesFile1L), cntLinesFile1),
+				"file2 read", cntLinesFile2,
+				"buffered", len(linesFile2L),
+				percentage(len(linesFile2L), cntLinesFile2),
+				"matched", cntSameLines,
+				percentage(cntSameLines, cntLinesFile2),
+			)
 		}
 
 		_, found := linesFile1L[line]
@@ -390,10 +400,10 @@ func lineSearchBatch() error {
 		log.Println(
 			"file1 read", cntLinesFile1,
 			"buffered", len(linesFile1L),
-			percentage(cntLinesFile1, len(linesFile1L)),
+			percentage(len(linesFile1L), cntLinesFile1),
 			"file2 read", cntLinesFile2,
 			"buffered", len(linesFile2L),
-			percentage(cntLinesFile2, len(linesFile2L)),
+			percentage(len(linesFile2L), cntLinesFile2),
 			"matched", cntSameLines,
 			percentage(cntSameLines, cntLinesFile2),
 		)
@@ -420,10 +430,10 @@ func lineSearchBatch() error {
 			log.Println(
 				"file1 read", cntLinesFile1,
 				"buffered", len(linesFile1L),
-				percentage(cntLinesFile1, len(linesFile1L)),
+				percentage(len(linesFile1L), cntLinesFile1),
 				"file2 read", cntLinesFile2,
 				"buffered", len(linesFile2L),
-				percentage(cntLinesFile2, len(linesFile2L)),
+				percentage(len(linesFile2L), cntLinesFile2),
 				"matched", cntSameLines,
 				percentage(cntSameLines, cntLinesFile2),
 			)
@@ -464,10 +474,10 @@ func lineSearchBatch() error {
 		log.Println(
 			"file1 read", cntLinesFile1,
 			"buffered", len(linesFile1L),
-			percentage(cntLinesFile1, len(linesFile1L)),
+			percentage(len(linesFile1L), cntLinesFile1),
 			"file2 read", cntLinesFile2,
 			"buffered", len(linesFile2L),
-			percentage(cntLinesFile2, len(linesFile2L)),
+			percentage(len(linesFile2L), cntLinesFile2),
 			"matched", cntSameLines,
 			percentage(cntSameLines, cntLinesFile2),
 		)
@@ -781,9 +791,9 @@ func Scomm(
 	discard5 = discard5Param
 	discard6 = discard6Param
 	discard7 = discard7Param
-	batchSize = batchSizeParam
-	if batchSize == -1 {
-		batchSize = 1_000_000
+	if batchSizeParam == 0 {
+		batchSize = 1_000_000 // default value
+		// -1 = full mode
 	}
 	outModeMerge = outModeMergeParam
 

@@ -38,7 +38,7 @@ func main() {
 	// flag.StringVar(&tagParam, "t", "5-14", "tag field definition; without -d use a fixed length fields, with -d use a field,list")
 	flag.StringVar(&payloadParam, "p", "", "payload: the interesting data associated with the key; LIST")
 	flag.StringVar(&delimiter, "d", "", "use delimited mode for KEY and PAYLOAD values, without it use fixed length fields")
-	flag.IntVar(&batchSize, "b", 0, "batch size for reading input files")
+	flag.IntVar(&batchSize, "b", -1, "batch size for reading input files")
 	flag.BoolVar(&outModeMerge, "m", true, "extra info from FILE1 for data matching the key only from FILE2")
 	flag.BoolVar(&noFile1, "1", false, "discard lines only in FILE1 , otherwise output them on file descriptor 6")
 	flag.BoolVar(&noFile2, "2", false, "discard lines only in FILE2 , otherwise output them on file descriptor 5")
