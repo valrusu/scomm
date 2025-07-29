@@ -112,3 +112,21 @@ func TestGetCompoundFieldValue(t *testing.T) {
 		}
 	}
 }
+
+func TestPercentage(t *testing.T) {
+	if percentage(1, 100) != "1.0000%" {
+		t.Error()
+	}
+	if percentage(2, 100) != "2.0000%" {
+		t.Error()
+	}
+	if percentage(35, 1000) != "3.5000%" {
+		t.Error()
+	}
+	if percentage(1, 0) != "0%" {
+		t.Error()
+	}
+	if percentage(9999, 10000) != "99.9900%" {
+		t.Error()
+	}
+}

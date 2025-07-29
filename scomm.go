@@ -71,64 +71,32 @@ type lineParts struct {
 	payLoad, line string
 }
 
+const (
+	MAPSIZE   = 10_000_000
+	BATCHSIZE = 1_000_000
+	STATSINT  = 2_000_000
+)
+
 var (
 	cntLinesFile1, cntLinesFile2, cntSameLines, cntNewLines, updatedTags int
 
-	linesFile1KP                      map[string]string // used for key compare, key+payload output
-	linesFile2KP                      map[string]string
-	linesFile1KLP                     map[string]lineParts // used for key compare, full line output
-	linesFile2KLP                     map[string]lineParts
-	linesFile1L                       map[string]struct{} // used for line compare, full line output
-	linesFile2L                       map[string]struct{}
-	file3, file4, file5, file6, file7 *os.File
-	verbose                           bool
-	batchSize                         int
-	useKey, fullLineOut, outModeMerge bool
-	keyPos, payloadPos                [][2]int
-	dataDelim                         string
+	linesFile1KP                         map[string]string // used for key compare, key+payload output
+	linesFile2KP                         map[string]string
+	linesFile1KL                         map[string]lineParts // used for key compare, full line output
+	linesFile2KL                         map[string]lineParts
+	linesFile1LL                         map[string]struct{} // used for line compare, full line output
+	linesFile2LL                         map[string]struct{}
+	file3, file4, file5, file6, file7    *os.File
+	verbose                              bool
+	batchSize                            int
+	useKey, fullLineOutput, outModeMerge bool
+	keyPos, payloadPos                   [][2]int
+	dataDelim                            string
 
 	fd3ok, fd4ok, fd5ok, fd6ok, fd7ok bool
 	sc3, sc4                          *bufio.Scanner
 	discard5, discard6, discard7      bool
 )
-
-// TODO I dont think this is used anymore since KEY is also compound
-// getSimpleField extracts from a string line the substring or field defined by pos and optionally delimiter
-// pos in this case can look like either [4,7] => extract characters 4 to 7
-// or, with delimiter, [3,3]
-// func getSimpleField(line string, pos [2]int, delim string) string {
-
-// 	if delim == "" {
-// 		var x, y int
-
-// 		if pos[0] == 0 {
-// 			x = 0
-// 		} else {
-// 			x = pos[0] - 1
-// 		}
-// 		if pos[1] == 0 {
-// 			y = len(line)
-// 		} else {
-// 			y = pos[1]
-// 		}
-// 		if y > len(line) {
-// 			log.Println("invalid data: " + line)
-// 			os.Exit(1)
-// 		}
-
-// 		return line[x:y]
-// 	} else {
-// 		ss := strings.Split(line, delim)
-
-// 		if pos[0] > len(ss) {
-// 			log.Println("invalid data: " + line)
-// 			os.Exit(1)
-// 			// return ""
-// 		}
-
-// 		return ss[pos[0]-1]
-// 	}
-// }
 
 // parseListItem parses one input simple token (int or int-int or int- or -int) interval into an array [2]int
 // LIST = ITEM[,ITEM...]
@@ -207,6 +175,10 @@ func parseList(param string) ([][2]int, error) {
 }
 
 // getCompundField returns data from a line, based on the field definition
+// a compound field is defined as a LIST, like 1 2,3 4-5 6- -7 and comma separated combinations (similar to the cut Linux command)
+// if the delimiter is set, then it will extract delimited delimited fields, and return them separated by the same delimiter
+// if the delimiter is not set, it will extract characters based on fixed width, and the return will be width based too
+// see scomm_test.go for examples
 func getCompoundFieldValue(line string, pos [][2]int, delim string) (string, error) {
 	var s string
 
@@ -223,11 +195,11 @@ func getCompoundFieldValue(line string, pos [][2]int, delim string) (string, err
 			} else {
 				y = min(v[1], len(line))
 			}
-			// dbg(x, y)
-			// if y > len(line) {
-			// 	log.Println("invalid data: " + line)
-			// 	os.Exit(1)
-			// }
+			if y > len(line) {
+				strerr := fmt.Sprintf("invalid data: %s for pattern %v without delimiters", line, pos)
+				log.Println(strerr)
+				return "", errors.New(strerr)
+			}
 			s += line[x:y]
 		}
 		return s, nil
@@ -263,20 +235,20 @@ func getCompoundFieldValue(line string, pos [][2]int, delim string) (string, err
 	}
 }
 
-func lineSearch() error {
-	vrb("lineSearch: allocate memory")
-	linesFile1L = make(map[string]struct{}, 100_000_000)
-	linesFile2L = make(map[string]struct{}, 100_000_000)
+func lineMatchLineOutput() error {
+	vrb("lineMatchLineOutput: allocate memory")
+	linesFile1LL = make(map[string]struct{}, MAPSIZE*10)
+	linesFile2LL = make(map[string]struct{}, MAPSIZE/5)
 
 	for sc3.Scan() {
 		line := sc3.Text()
 		cntLinesFile1++
 
-		if cntLinesFile1%2_000_000 == 0 {
-			vrb("read 2M lines from file1, total", cntLinesFile1)
-		}
+		linesFile1LL[line] = struct{}{}
 
-		linesFile1L[line] = struct{}{}
+		if cntLinesFile1%STATSINT == 0 {
+			vrb("read 2M lines from file1, total", cntLinesFile1, "unique", len(linesFile1LL))
+		}
 	}
 
 	if err := sc3.Err(); err != nil {
@@ -284,32 +256,17 @@ func lineSearch() error {
 		return fmt.Errorf("failed reading FD3: %v", err)
 	}
 
-	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1L), "are unique")
+	vrb("read", cntLinesFile1, "lines from file1, unique", len(linesFile1LL))
 
 	for sc4.Scan() {
 		line := sc4.Text()
 		cntLinesFile2++ // keep a count of lines read regardless if they existed in FILE1
 
-		if cntLinesFile2%2_000_000 == 0 {
-			vrb("read 2M lines from file2, total", cntLinesFile2)
-			// loop stats
-			log.Println(
-				"file1 read", cntLinesFile1,
-				"buffered", len(linesFile1L),
-				percentage(len(linesFile1L), cntLinesFile1),
-				"file2 read", cntLinesFile2,
-				"buffered", len(linesFile2L),
-				percentage(len(linesFile2L), cntLinesFile2),
-				"matched", cntSameLines,
-				percentage(cntSameLines, cntLinesFile2),
-			)
-		}
-
-		_, found := linesFile1L[line]
+		_, found := linesFile1LL[line]
 
 		if found {
 			cntSameLines++
-			delete(linesFile1L, line)
+			delete(linesFile1LL, line)
 
 			if !discard7 {
 				if _, err := file7.WriteString(line + "\n"); err != nil {
@@ -318,8 +275,18 @@ func lineSearch() error {
 				}
 			}
 		} else {
-			cntNewLines++
-			linesFile2L[line] = struct{}{}
+			// cntNewLines++
+			linesFile2LL[line] = struct{}{}
+		}
+
+		if cntLinesFile2%STATSINT == 0 {
+			vrb("read 2M lines from file2, total", cntLinesFile2)
+			// loop stats
+			vrb(
+				"file1 kept", len(linesFile1LL),
+				"file2 kept", len(linesFile2LL),
+				"matched", cntSameLines,
+			)
 		}
 	}
 
@@ -328,14 +295,15 @@ func lineSearch() error {
 		return fmt.Errorf("failed reading FD4: %v", err)
 	}
 
-	log.Println("read", cntLinesFile1, "file1 lines", cntLinesFile2, "file2 lines")
-	log.Println(cntSameLines, "matched,", len(linesFile1L), "only in file1", cntNewLines, "only in file2")
-	// I like a percentage stat: file1 left vs max(file1, file2), f2 left vs same, same lines vs same
-	m := max(cntLinesFile1, cntLinesFile2)
-	p5 := percentage(len(linesFile1L), m)
-	p6 := percentage(len(linesFile2L), m)
-	p7 := percentage(cntSameLines, m)
-	log.Printf("%s matched, %s only in file1, %s only in file2\n", p7, p5, p6)
+	if verbose {
+		fmt.Println("File1: total", cntLinesFile1, "kept", len(linesFile1LL), percentage(len(linesFile1LL), cntLinesFile1))
+		fmt.Println("File2: total", cntLinesFile2, "kept", len(linesFile2LL), percentage(len(linesFile2LL), cntLinesFile2))
+		fmt.Println("Common:", cntSameLines, percentage(cntSameLines, cntLinesFile1), percentage(cntSameLines, cntLinesFile2))
+	} else {
+		log.Println("File1: total", cntLinesFile1, "kept", len(linesFile1LL), percentage(len(linesFile1LL), cntLinesFile1))
+		log.Println("File2: total", cntLinesFile2, "kept", len(linesFile2LL), percentage(len(linesFile2LL), cntLinesFile2))
+		log.Println("Common:", cntSameLines, percentage(cntSameLines, cntLinesFile1), percentage(cntSameLines, cntLinesFile2))
+	}
 
 	done := make(chan error)
 
@@ -363,11 +331,11 @@ func lineSearch() error {
 	return nil
 }
 
-func lineSearchBatch() error {
-	vrb("lineSearchBatch: batchsize", batchSize)
+func lineSearchLineOutputBatch() error {
+	vrb("lineMatchLineOutputBatch: batchsize", batchSize)
 
-	linesFile1L = make(map[string]struct{}, batchSize) // it may grow beyond batchSize
-	linesFile2L = make(map[string]struct{}, batchSize) // it may grow beyond batchSize
+	linesFile1LL = make(map[string]struct{}, MAPSIZE)
+	linesFile2LL = make(map[string]struct{}, MAPSIZE/5)
 	var loopAgain bool
 
 	// read alternatively file1 and file2 until BOTH are done
@@ -380,11 +348,11 @@ func lineSearchBatch() error {
 			line := sc3.Text()
 			cntLinesFile1++
 
-			if batchSize > 2_000_000 && cntLinesFile1%2_000_000 == 0 {
+			linesFile1LL[line] = struct{}{}
+
+			if batchSize > STATSINT && cntLinesFile1%STATSINT == 0 {
 				vrb("read 2M lines from file1, total", cntLinesFile1)
 			}
-
-			linesFile1L[line] = struct{}{}
 
 			if cntLinesFile1%batchSize == 0 {
 				break
@@ -397,25 +365,20 @@ func lineSearchBatch() error {
 		}
 
 		// loop stats
-		log.Println(
-			"file1 read", cntLinesFile1,
-			"buffered", len(linesFile1L),
-			percentage(len(linesFile1L), cntLinesFile1),
-			"file2 read", cntLinesFile2,
-			"buffered", len(linesFile2L),
-			percentage(len(linesFile2L), cntLinesFile2),
+		vrb(
+			"file1", cntLinesFile1, len(linesFile1LL),
+			"file2", cntLinesFile2, len(linesFile2LL),
 			"matched", cntSameLines,
-			percentage(cntSameLines, cntLinesFile2),
 		)
 
 		// check existing file2 lines (read in previous loop) against the file1 lines, just read plus eventual old ones
-		for line, _ := range linesFile2L { // initially will be empty, then it will accumulate data
-			_, found := linesFile1L[line]
+		for line, _ := range linesFile2LL { // initially will be empty, then it will accumulate data
+			_, found := linesFile1LL[line]
 
 			if found {
 				cntSameLines++
-				delete(linesFile1L, line)
-				delete(linesFile2L, line)
+				delete(linesFile1LL, line)
+				delete(linesFile2LL, line)
 
 				if !discard7 {
 					if _, err := file7.WriteString(line + "\n"); err != nil {
@@ -425,17 +388,12 @@ func lineSearchBatch() error {
 				}
 			}
 		}
-		if len(linesFile2L) > 0 { // or cntLinesFile2 ?
+		if len(linesFile2LL) > 0 { // or cntLinesFile2 ?
 			// loop stats
-			log.Println(
-				"file1 read", cntLinesFile1,
-				"buffered", len(linesFile1L),
-				percentage(len(linesFile1L), cntLinesFile1),
-				"file2 read", cntLinesFile2,
-				"buffered", len(linesFile2L),
-				percentage(len(linesFile2L), cntLinesFile2),
+			vrb(
+				"file1", cntLinesFile1, len(linesFile1LL),
+				"file2", cntLinesFile2, len(linesFile2LL),
 				"matched", cntSameLines,
-				percentage(cntSameLines, cntLinesFile2),
 			)
 		}
 
@@ -445,15 +403,15 @@ func lineSearchBatch() error {
 			line := sc4.Text()
 			cntLinesFile2++ // keep a count of lines read regardless if they existed in FILE1
 
-			if batchSize > 2_000_000 && cntLinesFile2%2_000_000 == 0 {
+			if batchSize > STATSINT && cntLinesFile2%STATSINT == 0 {
 				vrb("read 2M lines from file2, total", cntLinesFile2)
 			}
 
-			_, found := linesFile1L[line]
+			_, found := linesFile1LL[line]
 
 			if found {
 				cntSameLines++
-				delete(linesFile1L, line)
+				delete(linesFile1LL, line)
 
 				if !discard7 {
 					if _, err := file7.WriteString(line + "\n"); err != nil {
@@ -463,7 +421,7 @@ func lineSearchBatch() error {
 				}
 			} else {
 				cntNewLines++
-				linesFile2L[line] = struct{}{}
+				linesFile2LL[line] = struct{}{}
 			}
 
 			if cntLinesFile2%batchSize == 0 {
@@ -471,15 +429,10 @@ func lineSearchBatch() error {
 			}
 		}
 		// loop stats
-		log.Println(
-			"file1 read", cntLinesFile1,
-			"buffered", len(linesFile1L),
-			percentage(len(linesFile1L), cntLinesFile1),
-			"file2 read", cntLinesFile2,
-			"buffered", len(linesFile2L),
-			percentage(len(linesFile2L), cntLinesFile2),
+		vrb(
+			"file1", cntLinesFile1, len(linesFile1LL),
+			"file2", cntLinesFile2, len(linesFile2LL),
 			"matched", cntSameLines,
-			percentage(cntSameLines, cntLinesFile2),
 		)
 
 		if err := sc4.Err(); err != nil {
@@ -492,23 +445,24 @@ func lineSearchBatch() error {
 		}
 	}
 
-	log.Println("read", cntLinesFile1, "file1 lines", cntLinesFile2, "file2 lines")
-	log.Println(cntSameLines, "matched,", len(linesFile1L), "only in file1", cntNewLines, "only in file2")
-	// I like a percentage stat: file1 left vs max(file1, file2), f2 left vs same, same lines vs same
-	m := max(cntLinesFile1, cntLinesFile2)
-	p5 := percentage(len(linesFile1L), m)
-	p6 := percentage(len(linesFile2L), m)
-	p7 := percentage(cntSameLines, m)
-	log.Printf("%s matched, %s only in file1, %s only in file2\n", p7, p5, p6)
+	if verbose {
+		fmt.Println("File1: total", cntLinesFile1, "kept", len(linesFile1LL), percentage(len(linesFile1LL), cntLinesFile1))
+		fmt.Println("File2: total", cntLinesFile2, "kept", len(linesFile2LL), percentage(len(linesFile2LL), cntLinesFile2))
+		fmt.Println("Common:", cntSameLines, percentage(cntSameLines, cntLinesFile1), percentage(cntSameLines, cntLinesFile2))
+	} else {
+		log.Println("File1: total", cntLinesFile1, "kept", len(linesFile1LL), percentage(len(linesFile1LL), cntLinesFile1))
+		log.Println("File2: total", cntLinesFile2, "kept", len(linesFile2LL), percentage(len(linesFile2LL), cntLinesFile2))
+		log.Println("Common:", cntSameLines, percentage(cntSameLines, cntLinesFile1), percentage(cntSameLines, cntLinesFile2))
+	}
 
 	done := make(chan error)
 
 	go func() {
-		done <- writeFile2DataL()
+		done <- writeFile1DataL()
 	}()
 
 	go func() {
-		done <- writeFile1DataL()
+		done <- writeFile2DataL()
 	}()
 
 	err1 := <-done
@@ -527,16 +481,16 @@ func lineSearchBatch() error {
 	return nil
 }
 
-func keySearchPayloadOutput() error {
+func keyMatchPayloadOutput() error {
 	vrb("keySearchPayloadOutput: allocate memory")
-	linesFile1KP = make(map[string]string)
-	linesFile2KP = make(map[string]string)
+	linesFile1KP = make(map[string]string, 100_000_000)
+	linesFile2KP = make(map[string]string, 100_000_000)
 
 	for sc3.Scan() {
 		line := sc3.Text()
 		cntLinesFile1++
 
-		if cntLinesFile1%2_000_000 == 0 {
+		if cntLinesFile1%STATSINT == 0 {
 			vrb("read 2M lines from file1, total", cntLinesFile1)
 		}
 
@@ -566,9 +520,9 @@ func keySearchPayloadOutput() error {
 		line := sc4.Text()
 		cntLinesFile2++ // keep a count of lines read regardless if they existed in FILE1
 
-		if cntLinesFile2%2_000_000 == 0 {
+		if cntLinesFile2%STATSINT == 0 {
 			vrb("read 2M lines from file2, total", cntLinesFile2)
-			vrb("file1 lines", len(linesFile1KP), "file2 lines", len(linesFile2KLP), "matched lines", cntSameLines)
+			vrb("file1 lines", len(linesFile1KP), "file2 lines", len(linesFile2KL), "matched lines", cntSameLines)
 		}
 
 		k2, err := getCompoundFieldValue(line, keyPos, dataDelim)
@@ -614,7 +568,7 @@ func keySearchPayloadOutput() error {
 	}
 
 	log.Println("read", cntLinesFile1, "file1 lines", cntLinesFile2, "file2 lines,")
-	log.Println(cntSameLines, "matched,", len(linesFile1L), "file1 preserved", cntNewLines, "file2 preserved")
+	log.Println(cntSameLines, "matched,", len(linesFile1LL), "file1 preserved", cntNewLines, "file2 preserved")
 
 	done := make(chan error)
 
@@ -642,16 +596,16 @@ func keySearchPayloadOutput() error {
 	return nil
 }
 
-func keySearchFullOutput() error {
-	vrb("keySearchFullOutput: allocate memory")
-	linesFile1KLP = make(map[string]lineParts)
-	linesFile2KLP = make(map[string]lineParts)
+func keyMatchLineOutput() error {
+	vrb("keySearchLinelOutput: allocate memory")
+	linesFile1KL = make(map[string]lineParts, 100_000_000)
+	linesFile2KL = make(map[string]lineParts, 100_000_000)
 
 	for sc3.Scan() {
 		line := sc3.Text()
 		cntLinesFile1++
 
-		if cntLinesFile1%2_000_000 == 0 {
+		if cntLinesFile1%STATSINT == 0 {
 			vrb("read 2M lines from file1, total", cntLinesFile1)
 		}
 
@@ -667,7 +621,7 @@ func keySearchFullOutput() error {
 			return err
 		}
 
-		linesFile1KLP[k1] = lineParts{payLoad: p1, line: line}
+		linesFile1KL[k1] = lineParts{payLoad: p1, line: line}
 	}
 
 	if err := sc3.Err(); err != nil {
@@ -675,15 +629,26 @@ func keySearchFullOutput() error {
 		return fmt.Errorf("failed reading FD3: %v", err)
 	}
 
-	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1KLP), "are unique")
+	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1KL), "have unique keys")
 
 	for sc4.Scan() {
 		line := sc4.Text()
 		cntLinesFile2++ // keep a count of lines read regardless if they existed in FILE1
 
-		if cntLinesFile2%2_000_000 == 0 {
+		if cntLinesFile2%STATSINT == 0 {
 			vrb("read 2M lines from file2, total", cntLinesFile2)
-			vrb("file1 lines", len(linesFile1KLP), "file2 lines", len(linesFile2KLP), "matched lines", cntSameLines)
+			vrb("file1 lines", len(linesFile1KL), "file2 lines", len(linesFile2KL), "matched lines", cntSameLines)
+			// loop stats - TODO make this a vrb call
+			log.Println(
+				"file1 read", cntLinesFile1,
+				"buffered", len(linesFile1KL),
+				percentage(len(linesFile1KL), cntLinesFile1),
+				"file2 read", cntLinesFile2,
+				"buffered", len(linesFile2KL),
+				percentage(len(linesFile2KL), cntLinesFile2),
+				"matched", cntSameLines,
+				percentage(cntSameLines, cntLinesFile2),
+			)
 		}
 
 		k2, err := getCompoundFieldValue(line, keyPos, dataDelim)
@@ -698,12 +663,13 @@ func keySearchFullOutput() error {
 			return err
 		}
 
-		lp1, found := linesFile1KLP[k2]
+		lp1, found := linesFile1KL[k2]
 
 		if found { // key found in file1
 			if p2 == lp1.payLoad { // key found and payload same
 				cntSameLines++
-				delete(linesFile1KLP, k2)
+				delete(linesFile1KL, k2)
+
 				if !discard7 {
 					if _, err := file7.WriteString(line + "\n"); err != nil {
 						log.Println("failed to write to FD7:", err)
@@ -712,14 +678,15 @@ func keySearchFullOutput() error {
 				}
 			} else { // key found and payload diff
 				cntNewLines++
-				linesFile2KLP[k2] = lineParts{payLoad: p2, line: line}
+				linesFile2KL[k2] = lineParts{payLoad: p2, line: line}
+
 				if outModeMerge { // dont write deletes
-					delete(linesFile1KLP, k2)
+					delete(linesFile1KL, k2)
 				}
 			}
 		} else {
 			cntNewLines++
-			linesFile2KLP[k2] = lineParts{payLoad: p2, line: line}
+			linesFile2KL[k2] = lineParts{payLoad: p2, line: line}
 		}
 	}
 
@@ -729,7 +696,12 @@ func keySearchFullOutput() error {
 	}
 
 	log.Println("read", cntLinesFile1, "file1 lines", cntLinesFile2, "file2 lines,")
-	log.Println(cntSameLines, "matched,", len(linesFile1L), "file1 preserved", cntNewLines, "file2 preserved")
+	log.Println(cntSameLines, "matched,", len(linesFile1LL), "file1 preserved", cntNewLines, "file2 preserved")
+	m := max(cntLinesFile1, cntLinesFile2)
+	p5 := percentage(len(linesFile1KL), m)
+	p6 := percentage(len(linesFile2KL), m)
+	p7 := percentage(cntSameLines, m)
+	log.Printf("%s matched, %s only in file1, %s only in file2\n", p7, p5, p6)
 
 	done := make(chan error)
 
@@ -776,26 +748,29 @@ func Scomm(
 	dataDelimParam string,
 	batchSizeParam int,
 	outModeMergeParam bool,
-	fullLineOutParam bool,
+	fullLineOutputParam bool,
 	discard5Param, discard6Param, discard7Param bool,
 ) error {
 
 	var err error
 
 	log.SetFlags(log.Ldate | log.Ltime)
-	log.Println("start scomm")
 
 	verbose = verboseParam
 	dataDelim = dataDelimParam
-	fullLineOut = fullLineOutParam
+	fullLineOutput = fullLineOutputParam
 	discard5 = discard5Param
 	discard6 = discard6Param
 	discard7 = discard7Param
 	if batchSizeParam == 0 {
-		batchSize = 1_000_000 // default value
+		batchSize = BATCHSIZE // default value
+	} else {
+		batchSize = batchSizeParam
 		// -1 = full mode
 	}
 	outModeMerge = outModeMergeParam
+
+	vrb("start scomm")
 
 	// init pkg level vars in case of multiple calls to scomm
 	cntLinesFile1 = 0
@@ -823,7 +798,7 @@ func Scomm(
 	vrb("discard5", discard5)
 	vrb("discard6", discard6)
 	vrb("discard7", discard7)
-	vrb("fullLineOut", fullLineOut)
+	vrb("fullLineOutput", fullLineOutput)
 
 	if keyParam != "" && payloadParam == "" && keyParam == "" && payloadParam != "" {
 		log.Println("need both key / payload parameters or none")
@@ -887,22 +862,14 @@ func Scomm(
 		}
 	}
 
-	batchMode := batchSize > 0
-
 	sc3 = bufio.NewScanner(file3)
 	sc4 = bufio.NewScanner(file4)
 
-	if batchMode {
-		log.Println("start processing in batch mode, size", batchSize)
-	} else {
-		log.Println("start processing in full mode")
-	}
-
-	// read both headers to get it over with
+	// read and skip both headers to get it over with
 	if skipLines > 0 {
 		for i := 1; i <= skipLines; i++ {
 			if sc3.Scan() {
-				log.Println("ignoring file1 header", sc3.Text())
+				vrb("ignoring file1 header", sc3.Text())
 			} else {
 				// unable to even read one line, and header was specified - problem
 				log.Println("unable to read file1 header")
@@ -911,7 +878,7 @@ func Scomm(
 		}
 		for i := 1; i <= skipLines; i++ {
 			if sc4.Scan() {
-				log.Println("ignoring file2 header", sc4.Text())
+				vrb("ignoring file2 header", sc4.Text())
 			} else {
 				// unable to even read one line, and header was specified - problem
 				log.Println("unable to read file2 header")
@@ -920,26 +887,22 @@ func Scomm(
 		}
 	}
 
-	if batchMode {
-		if useKey {
-			if fullLineOut {
-				keySearchFullOutputBatch()
-			} else {
-				keySearchPayloadOutputBatch()
-			}
-		} else {
-			lineSearchBatch()
-		}
-	} else {
-		if useKey {
-			if fullLineOut {
-				keySearchFullOutput()
-			} else {
-				keySearchPayloadOutput()
-			}
-		} else {
-			lineSearch()
-		}
+	switch {
+	case batchSize > 0 && useKey && fullLineOutput:
+		keySearchFullOutputBatch()
+	case batchSize > 0 && useKey && !fullLineOutput:
+		keySearchPayloadOutputBatch()
+	case batchSize > 0 && !useKey:
+		lineSearchLineOutputBatch()
+	case batchSize <= 0 && useKey && fullLineOutput:
+		keyMatchLineOutput()
+	case batchSize <= 0 && useKey && !fullLineOutput:
+		keyMatchPayloadOutput()
+	case batchSize <= 0 && !useKey:
+		lineMatchLineOutput()
+	default:
+		log.Println("huh???")
+		return errors.New("impossible")
 	}
 
 	ts2 := time.Now()
@@ -947,7 +910,7 @@ func Scomm(
 	// pprof.StopCPUProfile()
 	// }
 
-	log.Println("end scomm, time taken", math.Ceil(ts2.Sub(ts1).Seconds()), "sec")
+	vrb("end scomm, time taken", math.Ceil(ts2.Sub(ts1).Seconds()), "sec")
 	return nil
 }
 
@@ -960,7 +923,7 @@ func writeFile2DataKP() error {
 			return fmt.Errorf("failed to write to FD6: %v", err)
 		}
 	}
-	log.Println("wrote file2 data output")
+	vrb("wrote file2 data output")
 	return nil
 }
 
@@ -973,59 +936,59 @@ func writeFile1DataKP() error {
 			return fmt.Errorf("failed to write to FD5: %v", err)
 		}
 	}
-	log.Println("wrote file1 data output")
-	return nil
-}
-
-func writeFile2DataL() error {
-	log.Println("write newFile2DataOut")
-	for line := range linesFile2L {
-		_, err := file6.WriteString(line + "\n")
-		if err != nil {
-			log.Println("failed to write to FD6:", err)
-			return fmt.Errorf("failed to write to FD6: %v", err)
-		}
-	}
-	log.Println("wrote file2 data output")
+	vrb("wrote file1 data output")
 	return nil
 }
 
 func writeFile1DataL() error {
-	log.Println("write newFile1DataOut")
-	for line := range linesFile1L {
+	vrb("write newFile1DataOut")
+	for line := range linesFile1LL {
 		_, err := file5.WriteString(line + "\n")
 		if err != nil {
 			log.Println("failed to write to FD5:", err)
 			return fmt.Errorf("failed to write to FD5: %v", err)
 		}
 	}
-	log.Println("wrote file1 data output")
+	vrb("wrote file1 data output")
+	return nil
+}
+
+func writeFile2DataL() error {
+	vrb("write newFile2DataOut")
+	for line := range linesFile2LL {
+		_, err := file6.WriteString(line + "\n")
+		if err != nil {
+			log.Println("failed to write to FD6:", err)
+			return fmt.Errorf("failed to write to FD6: %v", err)
+		}
+	}
+	vrb("wrote file2 data output")
 	return nil
 }
 
 func writeFile2DataF() error {
 	log.Println("write newFile2DataOut")
-	for _, lp := range linesFile2KLP {
+	for _, lp := range linesFile2KL {
 		_, err := file6.WriteString(lp.line + "\n")
 		if err != nil {
 			log.Println("failed to write to FD6:", err)
 			return fmt.Errorf("failed to write to FD6: %v", err)
 		}
 	}
-	log.Println("wrote file2 data output")
+	vrb("wrote file2 data output")
 	return nil
 }
 
 func writeFile1DataF() error {
 	log.Println("write newFile1DataOut")
-	for _, lp := range linesFile1KLP {
+	for _, lp := range linesFile1KL {
 		_, err := file5.WriteString(lp.line + "\n")
 		if err != nil {
 			log.Println("failed to write to FD5:", err)
 			return fmt.Errorf("failed to write to FD5: %v", err)
 		}
 	}
-	log.Println("wrote file1 data output")
+	vrb("wrote file1 data output")
 	return nil
 }
 
@@ -1065,5 +1028,5 @@ func percentage(n1, n2 int) string {
 	if n2 == 0 {
 		return "0%"
 	}
-	return fmt.Sprintf("%.2f%%", float64(n1)*100/float64(n2))
+	return fmt.Sprintf("%.4f%%", float64(n1)*100/float64(n2))
 }
