@@ -490,10 +490,6 @@ func keyMatchPayloadOutput() error {
 		line := sc3.Text()
 		cntLinesFile1++
 
-		if cntLinesFile1%STATSINT == 0 {
-			vrb("read 2M lines from file1, total", cntLinesFile1)
-		}
-
 		k1, err := getCompoundFieldValue(line, keyPos, dataDelim)
 		if err != nil {
 			log.Println(err)
@@ -507,6 +503,10 @@ func keyMatchPayloadOutput() error {
 		}
 
 		linesFile1KP[k1] = p1
+
+		if cntLinesFile1%STATSINT == 0 {
+			vrb("read 2M lines from file1, total", cntLinesFile1)
+		}
 	}
 
 	if err := sc3.Err(); err != nil {
@@ -519,11 +519,6 @@ func keyMatchPayloadOutput() error {
 	for sc4.Scan() {
 		line := sc4.Text()
 		cntLinesFile2++ // keep a count of lines read regardless if they existed in FILE1
-
-		if cntLinesFile2%STATSINT == 0 {
-			vrb("read 2M lines from file2, total", cntLinesFile2)
-			vrb("file1 lines", len(linesFile1KP), "file2 lines", len(linesFile2KL), "matched lines", cntSameLines)
-		}
 
 		k2, err := getCompoundFieldValue(line, keyPos, dataDelim)
 		if err != nil {
@@ -559,6 +554,11 @@ func keyMatchPayloadOutput() error {
 		} else { // key not found
 			cntNewLines++
 			linesFile2KP[k2] = p2
+		}
+
+		if cntLinesFile2%STATSINT == 0 {
+			vrb("read 2M lines from file2, total", cntLinesFile2)
+			vrb("file1 lines", len(linesFile1KP), "file2 lines", len(linesFile2KL), "matched lines", cntSameLines)
 		}
 	}
 
@@ -597,17 +597,13 @@ func keyMatchPayloadOutput() error {
 }
 
 func keyMatchLineOutput() error {
-	vrb("keySearchLinelOutput: allocate memory")
-	linesFile1KL = make(map[string]lineParts, 100_000_000)
-	linesFile2KL = make(map[string]lineParts, 100_000_000)
+	vrb("keySearchLineOutput: allocate memory")
+	linesFile1KL = make(map[string]lineParts, MAPSIZE*5)
+	linesFile2KL = make(map[string]lineParts, MAPSIZE/2)
 
 	for sc3.Scan() {
 		line := sc3.Text()
 		cntLinesFile1++
-
-		if cntLinesFile1%STATSINT == 0 {
-			vrb("read 2M lines from file1, total", cntLinesFile1)
-		}
 
 		k1, err := getCompoundFieldValue(line, keyPos, dataDelim)
 		if err != nil {
@@ -622,6 +618,10 @@ func keyMatchLineOutput() error {
 		}
 
 		linesFile1KL[k1] = lineParts{payLoad: p1, line: line}
+
+		if cntLinesFile1%STATSINT == 0 {
+			vrb("read 2M lines from file1, total", cntLinesFile1, "unique keys", len(linesFile1KL))
+		}
 	}
 
 	if err := sc3.Err(); err != nil {
@@ -629,27 +629,11 @@ func keyMatchLineOutput() error {
 		return fmt.Errorf("failed reading FD3: %v", err)
 	}
 
-	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1KL), "have unique keys")
+	vrb("read", cntLinesFile1, "lines from file1, unique keys", len(linesFile1KL))
 
 	for sc4.Scan() {
 		line := sc4.Text()
 		cntLinesFile2++ // keep a count of lines read regardless if they existed in FILE1
-
-		if cntLinesFile2%STATSINT == 0 {
-			vrb("read 2M lines from file2, total", cntLinesFile2)
-			vrb("file1 lines", len(linesFile1KL), "file2 lines", len(linesFile2KL), "matched lines", cntSameLines)
-			// loop stats - TODO make this a vrb call
-			log.Println(
-				"file1 read", cntLinesFile1,
-				"buffered", len(linesFile1KL),
-				percentage(len(linesFile1KL), cntLinesFile1),
-				"file2 read", cntLinesFile2,
-				"buffered", len(linesFile2KL),
-				percentage(len(linesFile2KL), cntLinesFile2),
-				"matched", cntSameLines,
-				percentage(cntSameLines, cntLinesFile2),
-			)
-		}
 
 		k2, err := getCompoundFieldValue(line, keyPos, dataDelim)
 		if err != nil {
@@ -665,7 +649,7 @@ func keyMatchLineOutput() error {
 
 		lp1, found := linesFile1KL[k2]
 
-		if found { // key found in file1
+		if found { // key2 found in file1
 			if p2 == lp1.payLoad { // key found and payload same
 				cntSameLines++
 				delete(linesFile1KL, k2)
@@ -680,13 +664,24 @@ func keyMatchLineOutput() error {
 				cntNewLines++
 				linesFile2KL[k2] = lineParts{payLoad: p2, line: line}
 
-				if outModeMerge { // dont write deletes
+				if outModeMerge { // dont save deletes
 					delete(linesFile1KL, k2)
 				}
 			}
-		} else {
+		} else { // key2 not found in file1
 			cntNewLines++
 			linesFile2KL[k2] = lineParts{payLoad: p2, line: line}
+		}
+
+		if cntLinesFile2%STATSINT == 0 {
+			vrb("read 2M lines from file2, total", cntLinesFile2)
+			vrb("file1 lines", len(linesFile1KL), "file2 lines", len(linesFile2KL), "matched lines", cntSameLines)
+			// loop stats - TODO make this a vrb call
+			vrb(
+				"file1 kept", len(linesFile1KL),
+				"file2 kept", len(linesFile2KL),
+				"matched", cntSameLines,
+			)
 		}
 	}
 
@@ -695,13 +690,15 @@ func keyMatchLineOutput() error {
 		return fmt.Errorf("failed reading FD4: %v", err)
 	}
 
-	log.Println("read", cntLinesFile1, "file1 lines", cntLinesFile2, "file2 lines,")
-	log.Println(cntSameLines, "matched,", len(linesFile1LL), "file1 preserved", cntNewLines, "file2 preserved")
-	m := max(cntLinesFile1, cntLinesFile2)
-	p5 := percentage(len(linesFile1KL), m)
-	p6 := percentage(len(linesFile2KL), m)
-	p7 := percentage(cntSameLines, m)
-	log.Printf("%s matched, %s only in file1, %s only in file2\n", p7, p5, p6)
+	if verbose {
+		fmt.Println("File1: total", cntLinesFile1, "kept", len(linesFile1KL), percentage(len(linesFile1KL), cntLinesFile1))
+		fmt.Println("File2: total", cntLinesFile2, "kept", len(linesFile2KL), percentage(len(linesFile2KL), cntLinesFile2))
+		fmt.Println("Common:", cntSameLines, percentage(cntSameLines, cntLinesFile1), percentage(cntSameLines, cntLinesFile2))
+	} else {
+		log.Println("File1: total", cntLinesFile1, "kept", len(linesFile1KL), percentage(len(linesFile1KL), cntLinesFile1))
+		log.Println("File2: total", cntLinesFile2, "kept", len(linesFile2KL), percentage(len(linesFile2KL), cntLinesFile2))
+		log.Println("Common:", cntSameLines, percentage(cntSameLines, cntLinesFile1), percentage(cntSameLines, cntLinesFile2))
+	}
 
 	done := make(chan error)
 

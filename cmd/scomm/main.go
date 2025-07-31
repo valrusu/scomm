@@ -38,11 +38,11 @@ func main() {
 	flag.StringVar(&payloadParam, "p", "", "payload: the interesting data associated with the key; LIST")
 	flag.StringVar(&delimiter, "d", "", "use delimited mode for KEY and PAYLOAD values, without it use fixed length fields")
 	flag.IntVar(&batchSize, "b", -1, "batch size for reading input files; -1 or not specified = full mode; 0 = default to 1M")
-	flag.BoolVar(&outModeMerge, "m", true, "extra info from FILE1 for data matching the key only from FILE2")
-	flag.BoolVar(&noFile1, "1", false, "discard lines only in FILE1 , otherwise output them on file descriptor 6")
-	flag.BoolVar(&noFile2, "2", false, "discard lines only in FILE2 , otherwise output them on file descriptor 5")
+	flag.BoolVar(&outModeMerge, "m", true, "keys found in both files with different payloads will only be written to file descriptor 6")
+	flag.BoolVar(&noFile1, "1", false, "discard lines only in FILE1, otherwise output them on file descriptor 6")
+	flag.BoolVar(&noFile2, "2", false, "discard lines only in FILE2, otherwise output them on file descriptor 5")
 	flag.BoolVar(&noCommon, "3", false, "discard common lines, otherwise output them on file descriptor 7 if specified")
-	flag.BoolVar(&fullLineOutput, "f", false, "If -k/-p are used, then output full lines, otherwise just the KEY/PAYLOAD fields, default false")
+	flag.BoolVar(&fullLineOutput, "l", false, "If -k/-p are used, then output full lines, otherwise just the KEY/PAYLOAD fields, default false")
 	flag.Parse()
 
 	if err := scomm.Scomm(
