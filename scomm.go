@@ -306,26 +306,29 @@ func lineMatchLineOutput() error {
 	}
 
 	done := make(chan error)
+	waitFor := 0
 
-	go func() {
-		done <- writeFile2DataL()
-	}()
-
-	go func() {
-		done <- writeFile1DataL()
-	}()
-
-	err1 := <-done
-	err2 := <-done
-
-	if err1 != nil {
-		log.Println(err1)
-		return err1
+	if !discard5 {
+		go func() {
+			done <- writeFile1DataL()
+		}()
+		waitFor++
 	}
 
-	if err2 != nil {
-		log.Println(err2)
-		return err2
+	if !discard6 {
+		go func() {
+			done <- writeFile2DataL()
+		}()
+		waitFor++
+	}
+
+	for i := 1; i <= waitFor; i++ {
+		err := <-done
+
+		if err != nil {
+			log.Println(err)
+			return err
+		}
 	}
 
 	return nil
@@ -456,26 +459,29 @@ func lineSearchLineOutputBatch() error {
 	}
 
 	done := make(chan error)
+	waitFor := 0
 
-	go func() {
-		done <- writeFile1DataL()
-	}()
-
-	go func() {
-		done <- writeFile2DataL()
-	}()
-
-	err1 := <-done
-	err2 := <-done
-
-	if err1 != nil {
-		log.Println(err1)
-		return err1
+	if !discard5 {
+		go func() {
+			done <- writeFile1DataL()
+		}()
+		waitFor++
 	}
 
-	if err2 != nil {
-		log.Println(err2)
-		return err2
+	if !discard6 {
+		go func() {
+			done <- writeFile2DataL()
+		}()
+		waitFor++
+	}
+
+	for i := 1; i <= waitFor; i++ {
+		err := <-done
+
+		if err != nil {
+			log.Println(err)
+			return err
+		}
 	}
 
 	return nil
@@ -571,26 +577,29 @@ func keyMatchPayloadOutput() error {
 	log.Println(cntSameLines, "matched,", len(linesFile1LL), "file1 preserved", cntNewLines, "file2 preserved")
 
 	done := make(chan error)
+	waitFor := 0
 
-	go func() {
-		done <- writeFile2DataKP()
-	}()
-
-	go func() {
-		done <- writeFile1DataKP()
-	}()
-
-	err1 := <-done
-	err2 := <-done
-
-	if err1 != nil {
-		log.Println(err1)
-		return err1
+	if !discard5 {
+		go func() {
+			done <- writeFile1DataKP()
+		}()
+		waitFor++
 	}
 
-	if err2 != nil {
-		log.Println(err2)
-		return err2
+	if !discard6 {
+		go func() {
+			done <- writeFile2DataKP()
+		}()
+		waitFor++
+	}
+
+	for i := 1; i <= waitFor; i++ {
+		err := <-done
+
+		if err != nil {
+			log.Println(err)
+			return err
+		}
 	}
 
 	return nil
@@ -701,37 +710,40 @@ func keyMatchLineOutput() error {
 	}
 
 	done := make(chan error)
+	waitFor := 0
 
-	go func() {
-		done <- writeFile2DataF()
-	}()
-
-	go func() {
-		done <- writeFile1DataF()
-	}()
-
-	err1 := <-done
-	err2 := <-done
-
-	if err1 != nil {
-		log.Println(err1)
-		return err1
+	if !discard5 {
+		go func() {
+			done <- writeFile1DataF()
+		}()
+		waitFor++
 	}
 
-	if err2 != nil {
-		log.Println(err2)
-		return err2
+	if !discard6 {
+		go func() {
+			done <- writeFile2DataF()
+		}()
+		waitFor++
+	}
+
+	for i := 1; i <= waitFor; i++ {
+		err := <-done
+
+		if err != nil {
+			log.Println(err)
+			return err
+		}
 	}
 
 	return nil
 }
 
 func keySearchPayloadOutputBatch() error {
-	return nil
+	return errors.New("sorry, not implemented yet")
 }
 
 func keySearchFullOutputBatch() error {
-	return nil
+	return errors.New("sorry, not implemented yet")
 }
 
 ///////////////////////////////////////////////////
