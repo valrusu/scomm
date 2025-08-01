@@ -3,4 +3,5 @@ cmd/scomm/scomm.exe
 cmd/scomm/test?file?
 cmd/scomm/test?file?
 cmd/scomm/f?
-cmd/scomm/?.txt
+cmd/scomm/[5-7].txt
+cmd/scomm/[5-7]?.txt
