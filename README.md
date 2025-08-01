@@ -5,7 +5,7 @@
 ## Synopsis
 
 ```sh
-scomm [ -1 | -2 | -3 ] [ -D DELIMITER ] FILE1 FILE2 [ 3<FILE1 ] [ 4<FILE2 ] [ 5>FILE3 ] [ 6>FILE4 ] [ 7>FILE5 ]
+scomm [ -1 | -2 | -3 ] [ -d DELIMITER ] [ -H headerLines ] [ -b 0|-1|number ] 3<FILE1 4<FILE2 [ 5>FILE3 ] [ 6>FILE4 ] [ 7>FILE5 ]
 ```
 
 - When FILE1 or FILE2 (but not both) is `-`, read from standard input.
