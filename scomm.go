@@ -907,7 +907,7 @@ func Scomm(
 	// pprof.StopCPUProfile()
 	// }
 
-	fmt.Println("End scomm, time taken", math.Ceil(ts2.Sub(ts1).Seconds()), "sec")
+	log.Println("End scomm, time taken", math.Ceil(ts2.Sub(ts1).Seconds()), "sec")
 	return nil
 }
 
