@@ -67,3 +67,41 @@ Compare a "new" database, which contains the latest data, with an "old" database
 
     command
     ... and process the output to update the old database.
+
+Examples
+
+2 ZIP files are received daily, which containing a long list of data points. Most are the same, and I want to eliminate the common ones so that I can process them faster.
+
+unzip file1.zip
+
+wc -l file1
+88053460 file1
+
+unzip file2.zip
+
+wc -l file2
+88041881 file2
+
+This shows the differences only, without saving any data (-1 -2 -3). It ignores the first line of each file (-H):
+
+./scomm -H 1 -1 -2 -3 3<file1 4<file2
+
+File1: total 88053459 kept 677670 0.7696%
+File2: total 88041880 kept 666091 0.7566%
+Common: 87375789 99.2304% 99.2434%
+End scomm, time taken 123 sec
+
+This shows the differences, creating the 5.txt and 6.txt files contains lines only in file1 and only in file2 respectively:
+
+./scomm -H 1 -3 3<file1 4<file2 5>5.txt 6>6.txt
+
+File1: total 88053459 kept 677670 0.7696%
+File2: total 88041880 kept 666091 0.7566%
+Common: 87375789 99.2304% 99.2434%
+End scomm, time taken 132 sec
+
+wc -l 5.txt 6.txt
+  677670 5.txt
+  666091 6.txt
+
+Excluding the -3 and redirecting the FD7 would genarate a file with the common lines (99% of the lines).
