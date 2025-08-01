@@ -105,3 +105,4 @@ wc -l 5.txt 6.txt
   666091 6.txt
 
 Excluding the -3 and redirecting the FD7 would genarate a file with the common lines (99% of the lines).
+
