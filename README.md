@@ -5,10 +5,11 @@
 ## Synopsis
 
 ```sh
-scomm [ -1 | -2 | -3 ] [ -d DELIMITER ] [ -H headerLines ] [ -b 0|-1|number ] [ -k LIST -p LIST ] 3<INPUT1 4<INOUT2 [ 5>OUTPUT1 ] [ 6>OUTPUT2 ] [ 7>OUTPUT3 ]
+scomm [ -1 | -2 | -3 ] [ -d DELIMITER ] [ -H headerLines ] [ -b 0|-1|number ] [ -k LIST -p LIST ] 3<INPUT1 4<INPUT2 [ 5>OUTPUT1 ] [ 6>OUTPUT2 ] [ 7>OUTPUT3 ]
 ```
 
-- INPUT1 is read from file descriptor 3 (FD3), which can be a file, a pipe or a process
+- INPUT1 is read from file descriptor 3, which can be a file, a pipe or a process
+- INPUT2 is read from file descriptor 4, which can be a file, a pipe or a process
 - OUTPUT1, if not suppressed by the -1 option, will contain the lines only in INPUT1
 - OUTPUT2, if not suppressed by the -2 option, will contain the lines only in INPUT2
 - OUTPUT3, if not suppressed by the -3 option, will contain lines common to both INPUT1 and INPUT2
