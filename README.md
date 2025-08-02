@@ -72,14 +72,15 @@ And on OUTPUT2 either
 TODO need more clarity here about -m and -l
 
 `-m=true` assumes that:
-   - new and updates data from INPUT2 (where keys matched lines in INPUT1, regardless of payloads matching) will be merged into a database - gets output on OUTPUT2 (there is no point in deleting first the existing value.
-   - deleted data from INPUT1 (keys did not match any INPUT2) - gets output in OUTPUT1.
+   - deleted data from INPUT1 (keys did not match any INPUT2) - gets output in OUTPUT1; these will be "delete" statements.
+   - new data from INPUT2 (keys do not match any INPUT1) and updated data from INPUT2 (keys matched lines in INPUT1 but payloads differ) will be merged into a database - gets output on OUTPUT2 (there is no point in deleting first the existing value). These will be "merge" statements.
 This will likey lead to less data on OUTPUT1 then with `-m=false`.
 
 `-m=false` assumes that:
-   - the new data from INPUT2 will be inserted (keys did not match any INPUT1) - gets output on OUTPUT2
-   - the updated data from INPUT2 will also be inserted (keys matches, payloads did not) - gets output on OUTPUT2
-   - the deleted data from INPUT1 (keys did not match any INPUT2) will be deleted first - gets output on OUTPUT1
+  - the deleted data from INPUT1 (keys did not match any INPUT2) will be deleted first - gets output on OUTPUT1; these will be "delete" statements.
+  - the new data from INPUT2 will be inserted (keys did not match any INPUT1) - gets output on OUTPUT2. These will be "insert" statements.
+  - the updated data from INPUT2 will also be inserted (keys matches, payloads did not) - gets output on OUTPUT1 and OUTPUT2. These will also be "delete" and then "insert" statements.
+
 
 Keys and payloads/values are defined using a LIST of characters (without `-d`) or fields (with `-d`).
 
