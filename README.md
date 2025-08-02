@@ -51,16 +51,36 @@ They are defined the same way as the `-f` parameter of the well known `cut` comm
 For example, if we have lines like:
   `123,4,abcd`
 where 123 is the key, 4 is the value/payload, and acbd is other data we are not interested in.
+
 When comparing this line with:
   `123,4,bcde`
 we have the same key (123) and the same value/payload (4) so the lines are equal.
-Scomm will now output either:
-  `123,4,abcd` 
+Scomm will now output on OUTPUT3 either:
+  `123,4,bcde` if `-l` is used (output the full INPUT2 line), or
+  `123,4` if `-l` is not used (only display the key and value)
 
+When comparing this line with:
+  `123,5,bcde`
+we have the same key (123) and a different value/payload (4 vs 5) so the lines are not equal.
+Scomm will now output on OUTPUT1 either:
+  `123,4,abcd` if `-l` is used (output the full INPUT1 line), or
+  `123,4` if `-l` is not used (output only the key/value from INPUT1 line)
+And on OUTPUT2 either
+  `123,5,bcde` if `-l` is used (output the full INPUT2 line), or
+  `123,5` if `-l` is not used (output only the key/value from INPUT2 line)
 
-When using `-k/-p`, 
+TODO need more clarity here about -m and -l
 
-You can extract "keys" and "payloads" to define how lines are compared:
+`-m=true` assumes that:
+   - new and updates data from INPUT2 (where keys matched lines in INPUT1, regardless of payloads matching) will be merged into a database - gets output on OUTPUT2 (there is no point in deleting first the existing value.
+   - deleted data from INPUT1 (keys did not match any INPUT2) - gets output in OUTPUT1.
+This will likey lead to less data on OUTPUT1 then with `-m=false`.
+`-m=false` assumes that:
+   - the new data from INPUT2 will be inserted (keys did not match any INPUT1) - gets output on OUTPUT2
+   - the updated data from INPUT2 will also be inserted (keys matches, payloads did not) - gets output on OUTPUT2
+   - the deleted data from INPUT1 (keys did not match any INPUT2) will be deleted first - gets output on OUTPUT1
+
+Keys and payloads/values are defined using a LIST of characters (without `-d`) or fields (with `-d`).
 
 ### Character-Based Examples (`-k` and `-p`):
 
