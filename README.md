@@ -75,6 +75,7 @@ TODO need more clarity here about -m and -l
    - new and updates data from INPUT2 (where keys matched lines in INPUT1, regardless of payloads matching) will be merged into a database - gets output on OUTPUT2 (there is no point in deleting first the existing value.
    - deleted data from INPUT1 (keys did not match any INPUT2) - gets output in OUTPUT1.
 This will likey lead to less data on OUTPUT1 then with `-m=false`.
+
 `-m=false` assumes that:
    - the new data from INPUT2 will be inserted (keys did not match any INPUT1) - gets output on OUTPUT2
    - the updated data from INPUT2 will also be inserted (keys matches, payloads did not) - gets output on OUTPUT2
