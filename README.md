@@ -1,36 +1,64 @@
 # scomm - Stream Comparator for Unsorted Data
 
-`scomm` is a high-performance command-line tool to compare two **unsorted** files or data streams, identifying lines that are common, new, or obsolete. It is designed with scalability and streaming in mind, handling massive datasets efficiently.
+`scomm` is a command-line tool to compare two **unsorted** files or data streams, identifying lines that are common, new, or obsolete. It is designed with scalability and streaming in mind, handling massive datasets efficiently.
 
 ## Synopsis
 
 ```sh
-scomm [ -1 | -2 | -3 ] [ -d DELIMITER ] [ -H headerLines ] [ -b 0|-1|number ] 3<FILE1 4<FILE2 [ 5>FILE3 ] [ 6>FILE4 ] [ 7>FILE5 ]
+scomm [ -1 | -2 | -3 ] [ -d DELIMITER ] [ -H headerLines ] [ -b 0|-1|number ] [ -k LIST -p LIST ] 3<INPUT1 4<INOUT2 [ 5>OUTPUT1 ] [ 6>OUTPUT2 ] [ 7>OUTPUT3 ]
 ```
 
-- When FILE1 or FILE2 (but not both) is `-`, read from standard input.
-- FILE1 can be read from file descriptor 3 and FILE2 from file descriptor 4.
-- FILE3, FILE4, and FILE5 are output destinations for specific line categories.
+- INPUT1 is read from file descriptor 3 (FD3), which can be a file, a pipe or a process
+- OUTPUT1, if not suppressed by the -1 option, will contain the lines only in INPUT1
+- OUTPUT2, if not suppressed by the -2 option, will contain the lines only in INPUT2
+- OUTPUT3, if not suppressed by the -3 option, will contain lines common to both INPUT1 and INPUT2
 
 ## Options
 
-- `-1` — Output lines only in FILE1 (old data).
-- `-2` — Output lines only in FILE2 (new data).
-- `-3` — Output lines common to both files (default).
-- `-D DELIMITER` — Emit `DELIMITER` between sections in the output when using -1/-2/-3.
-- `-H N` — Skip the first N header lines from both files.
+- `-1` — Output lines only in INPUT1 (aka old data).
+- `-2` — Output lines only in INPUT2 (new data).
+- `-3` — Output lines common to both inputs (default).
+- `-H NUMBER` — Skip the first NUMBER header lines from both files.
 - `-k LIST` — Use character or field keys to determine matching lines.
 - `-p LIST` — Use payload fields to detect content updates when keys match.
-
+- `-d DELIMITER` — Emit `DELIMITER` between sections in the output when using -1/-2/-3.
+- `-b 0 | -1 | number` — Use batch mode, where INPUT1 is not read entirely in memory, and INPUT2 is read in batches.
+- `-m` - Output "merge-style" data. More info in the examples below.
+- `-l` - Output the full line when compareing by key/value. More info in the examples below.
+   
 ## Streaming File Descriptors
 
-- `3<FILE1` — Read old data from file descriptor 3.
-- `4<FILE2` — Read new data from file descriptor 4.
-- `5>FILE3` — Write lines only in FILE2 (new data).
-- `6>FILE4` — Write lines only in FILE1 (obsolete data).
-- `7>FILE5` — Write matched lines as they are detected.
+- `3<INPUT1` - Read old data from file descriptor 3.
+- `4<INPUT2` - Read new data from file descriptor 4.
+- `5>OUTPUT1` - Write lines only in FILE2 (new data).
+- `6>OUTPUT2` - Write lines only in FILE1 (obsolete data).
+- `7>OUTPUT3` - Write matched lines as they are detected.
+
+Inputs can be files but also the standard output of other processes, for example:
+`scomm ... 3< <(unzip -p zipfile.txt) ...`
+
+## Line-based Comparison
+
+This mode is used when none of `-k/-p` are used.
+Each line from INPUT2 is compared in full against each line from INPUT1, if they are the same they will go to OUTPUT3, the lines only in INPUT1 will go to OUTPUT1 and the lines only in INPUT2 will go to OUTPUT2.
 
 ## Field-Based Comparison
+
+Normally scomm compares full lines, deciding they are identical or not by matching a full line from INPUT2 against lines from INPUT1.
+In some cases, a partial match of the lines is needed, for which case we defined a `key` with `-k` and a `value/payload` with `-p`.
+They are defined the same way as the `-f` parameter of the well known `cut` command. Both `-k` and `-p` have to be used, or none to compare full lines.
+
+For example, if we have lines like:
+  `123,4,abcd`
+where 123 is the key, 4 is the value/payload, and acbd is other data we are not interested in.
+When comparing this line with:
+  `123,4,bcde`
+we have the same key (123) and the same value/payload (4) so the lines are equal.
+Scomm will now output either:
+  `123,4,abcd` 
+
+
+When using `-k/-p`, 
 
 You can extract "keys" and "payloads" to define how lines are compared:
 
@@ -44,7 +72,7 @@ You can extract "keys" and "payloads" to define how lines are compared:
 
 ### Delimited Fields (`-d`):
 
-When using `-d DELIM`, keys and payloads refer to field positions rather than characters.
+When using `-d DELIMITER`, keys and payloads refer to field positions rather than characters.
 
 ## Use Cases
 
