@@ -1,6 +1,6 @@
 # scomm - Stream Comparator for Unsorted Data
 
-`scomm` is a command-line tool to compare two **unsorted** files or data streams, identifying lines that are common, new, or obsolete. It is designed with scalability and streaming in mind, handling massive datasets efficiently.
+`scomm` is a command-line tool to compare two **unsorted** files or data streams, identifying lines that are common, new, or obsolete. It is designed with scalability and streaming in mind, handling massive datasets efficiently. It is similar to the "comm" Linux utility, but it can handle unsorted data and has more options for filtering and outputs.
 
 ## Synopsis
 
