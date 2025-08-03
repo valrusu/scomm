@@ -1,60 +1,5 @@
 package scomm
 
-// the tool is meant to DO something, I should not have to enable things, more to disable
-// so by default it should output as much as possible, and have options to disable stuff
-
-// INPUT:
-// order of the files matter in the output; file1 is considered the "old" one and file2 the "new" one
-// FILE1 from FD3
-// FILE2 from DF4
-
-// Example OUTPUT: without -k/-p             with -k/-p/
-// FD5: lines unique to FILE1
-// FD6: lines unique to FILE2
-// FD7: lines common                         lines common
-//                                           FILE1 lines for which key(file1) exists in FILE2 but payloads are different
-//
-// the output is meant like either "merge + delete" (no -e) or "delete + insert" (with -e)
-// I could change -e to -m for merge and reverse its logic
-//
-// Example OUTPUT: without -k/-p; ignore -f -e (all defaults):n
-//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
-//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE FFFFFFFF FD5 (only in file1)   DDD EEEEE GGGGGGGG FD6 (only in file2)
-//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH IIIII JJJJJJJJ FD5 (only in file1)   HHH KKKKK LLLLLLLL FD6 (only in file2)
-//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2)
-//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1)
-//
-// Example OUTPUT: with -k/-p, without -f, with -m (merge+delete) (-k/-p + defaults)
-//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB FD7 (same k+p)
-//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE FD7 (same k+p)
-//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK FD6 (same k, diff p: insert)
-//                         MMM NNNNN OOOOOOOO      MMM NNNNN FD6 (only in file2: insert)
-//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ FD5 (only in file1: delete)
-//
-// Example OUTPUT: with -k/-p, without -f, without -m (delete+insert)
-//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB FD7 (same k+p)
-//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE FD7 (same k+p)
-//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK FD6 (same k, diff p: merge)    HHH IIIII FD5 (delete)
-//                         MMM NNNNN OOOOOOOO      MMM NNNNN FD6 (only in file2: merge)
-//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ FD5 (only in file1: delete)
-//
-// Example OUTPUT: with -k/-p, with -f, with -m (merge+delete)
-//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
-//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG FD7 (same k+p, display G because of how I search)
-//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL FD6 (same k, diff p: merge)
-//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2: merge)
-//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1: delete)
-//
-// Example OUTPUT: with -k/-p, with -f, without -m (delete+insert)
-//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC FD7 (same line)
-//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG FD7 (same k+p, display G because of how I search)
-//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL FD6 (same k, diff p: insert)   HHH IIIII JJJJJJJJ FD5 (delete)
-//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO FD6 (only in file2: insert)
-//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR FD5 (only in file1: delete)
-//
-// TODO if k/p-based input with delimiter, the output has to contain the delimiter too (because fields will not be fixed length)
-//
-
 import (
 	"bufio"
 	"errors"
@@ -78,7 +23,7 @@ const (
 )
 
 var (
-	cntLinesFile1, cntLinesFile2, cntSameLines, cntNewLines, updatedTags int
+	cntLinesFile1, cntLinesFile2, cntSameLines, cntNewLines int
 
 	linesFile1KP                         map[string]string // used for key compare, key+payload output
 	linesFile2KP                         map[string]string
@@ -878,11 +823,11 @@ func Scomm(
 	if skipLines > 0 {
 		for i := 1; i <= skipLines; i++ {
 			if sc3.Scan() {
-				vrb("ignoring file1 header", sc3.Text())
+				vrb("ignoring INPUT1 header", sc3.Text())
 			} else {
 				// unable to even read one line, and header was specified - problem
-				log.Println("unable to read file1 header")
-				return errors.New("unable to read file1 header")
+				log.Println("unable to read INPUT1 header")
+				return errors.New("unable to read INPUT1 header")
 			}
 		}
 		for i := 1; i <= skipLines; i++ {
@@ -932,7 +877,7 @@ func writeFile2DataKP() error {
 			return fmt.Errorf("failed to write to FD6: %v", err)
 		}
 	}
-	vrb("wrote file2 data output")
+	vrb("wrote OUTPUT2 data output")
 	return nil
 }
 
@@ -945,7 +890,7 @@ func writeFile1DataKP() error {
 			return fmt.Errorf("failed to write to FD5: %v", err)
 		}
 	}
-	vrb("wrote file1 data output")
+	vrb("wrote OUTPUT1 data output")
 	return nil
 }
 
@@ -958,7 +903,7 @@ func writeFile1DataL() error {
 			return fmt.Errorf("failed to write to FD5: %v", err)
 		}
 	}
-	vrb("wrote file1 data output")
+	vrb("wrote OUTPUT3 data")
 	return nil
 }
 
@@ -971,7 +916,7 @@ func writeFile2DataL() error {
 			return fmt.Errorf("failed to write to FD6: %v", err)
 		}
 	}
-	vrb("wrote file2 data output")
+	vrb("wrote OUTPUT4 data")
 	return nil
 }
 
@@ -984,7 +929,7 @@ func writeFile2DataF() error {
 			return fmt.Errorf("failed to write to FD6: %v", err)
 		}
 	}
-	vrb("wrote file2 data output")
+	vrb("wrote OUTPUT4 data")
 	return nil
 }
 
@@ -997,7 +942,7 @@ func writeFile1DataF() error {
 			return fmt.Errorf("failed to write to FD5: %v", err)
 		}
 	}
-	vrb("wrote file1 data output")
+	vrb("wrote OUTPUT1 data")
 	return nil
 }
 
