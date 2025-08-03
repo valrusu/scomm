@@ -1,0 +1,48 @@
+// INPUT:
+// order of the files matter in the output; INPUT1 is considered the "old" one and INPUT2 the "new" one
+// INPUT1 from FD3
+// INPUT2 from DF4
+
+// Example OUTPUT: without -k/-p             with -k/-p/
+// OUTPUT1: lines unique to INPUT1
+// OUTPUT2: lines unique to INPUT2
+// OUTPUT3: lines common                         lines that are common
+//                                           INPUT1 lines for which key(INPUT1) exists in INPUT2 but payloads are different
+//
+// the output is meant like either "delete + merge" (with -m) or "delete + insert" (without -m)
+//
+// Example OUTPUT: without -k/-p; ignore -l -m (all defaults):
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC OUTPUT3 (same line)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE FFFFFFFF OUTPUT1 (only in INPUT1)           DDD EEEEE GGGGGGGG OUTPUT2 (only in INPUT2)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH IIIII JJJJJJJJ OUTPUT1 (only in INPUT1)           HHH KKKKK LLLLLLLL OUTPUT2 (only in INPUT2)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO OUTPUT2 (only in INPUT2)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR OUTPUT1 (only in INPUT1)
+//
+// Example OUTPUT: with -k/-p, without -l, without -m (delete+insert)
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB          OUTPUT3 (same k+p)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE          OUTPUT3 (same k+p)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK          OUTPUT2 (same k, diff p: insert)    HHH IIIII OUTPUT1 (delete)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN          OUTPUT2 (only in INPUT2: insert)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ          OUTPUT1 (only in INPUT1: delete)
+//
+// Example OUTPUT: with -k/-p, without -l, with -m (delete+merge)
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB          OUTPUT3 (same k+p)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE          OUTPUT3 (same k+p)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK          OUTPUT2 (same k, diff p: merge)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN          OUTPUT2 (only in INPUT2: merge)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ          OUTPUT1 (only in INPUT1: delete)
+//
+// Example OUTPUT: with -k/-p, with -l, without -m (delete+insert)
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC OUTPUT3 (same line)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG OUTPUT3 (same k+p, display G because of how I search)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL OUTPUT2 (same k, diff p: insert)   HHH IIIII JJJJJJJJ OUTPUT1 (delete)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO OUTPUT2 (only in INPUT2: insert)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR OUTPUT1 (only in INPUT1: delete)
+//
+// Example OUTPUT: with -k/-p, with -l, with -m (delete+merge)
+//  AAA BBBBB CCCCCCCC     AAA BBBBB CCCCCCCC      AAA BBBBB CCCCCCCC OUTPUT3 (same line)
+//  DDD EEEEE FFFFFFFF     DDD EEEEE GGGGGGGG      DDD EEEEE GGGGGGGG OUTPUT3 (same k+p, display G because of how I search)
+//  HHH IIIII JJJJJJJJ     HHH KKKKK LLLLLLLL      HHH KKKKK LLLLLLLL OUTPUT2 (same k, diff p: merge)
+//                         MMM NNNNN OOOOOOOO      MMM NNNNN OOOOOOOO OUTPUT2 (only in INPUT2: merge)
+//  PPP QQQQQ RRRRRRRR                             PPP QQQQQ RRRRRRRR OUTPUT1 (only in INPUT1: delete)
+//
