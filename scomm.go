@@ -192,7 +192,7 @@ func lineMatchLineOutput() error {
 		linesFile1LL[line] = struct{}{}
 
 		if cntLinesFile1%STATSINT == 0 {
-			vrb("read 2M lines from file1, total", cntLinesFile1, "unique", len(linesFile1LL))
+			vrb("read 2M lines from input1, total", cntLinesFile1, "unique", len(linesFile1LL))
 		}
 	}
 
@@ -201,7 +201,7 @@ func lineMatchLineOutput() error {
 		return fmt.Errorf("failed reading FD3: %v", err)
 	}
 
-	vrb("read", cntLinesFile1, "lines from file1, unique", len(linesFile1LL))
+	vrb("read", cntLinesFile1, "lines from inout1, unique", len(linesFile1LL))
 
 	for sc4.Scan() {
 		line := sc4.Text()
@@ -225,7 +225,7 @@ func lineMatchLineOutput() error {
 		}
 
 		if cntLinesFile2%STATSINT == 0 {
-			vrb("read 2M lines from file2, total", cntLinesFile2)
+			vrb("read 2M lines from input2, total", cntLinesFile2)
 			// loop stats
 			vrb(
 				"file1 kept", len(linesFile1LL),
@@ -241,12 +241,12 @@ func lineMatchLineOutput() error {
 	}
 
 	if verbose {
-		fmt.Println("File1: total", cntLinesFile1, "kept", len(linesFile1LL), percentage(len(linesFile1LL), cntLinesFile1))
-		fmt.Println("File2: total", cntLinesFile2, "kept", len(linesFile2LL), percentage(len(linesFile2LL), cntLinesFile2))
+		fmt.Println("Input1: total", cntLinesFile1, "kept", len(linesFile1LL), percentage(len(linesFile1LL), cntLinesFile1))
+		fmt.Println("Input2: total", cntLinesFile2, "kept", len(linesFile2LL), percentage(len(linesFile2LL), cntLinesFile2))
 		fmt.Println("Common:", cntSameLines, percentage(cntSameLines, cntLinesFile1), percentage(cntSameLines, cntLinesFile2))
 	} else {
-		log.Println("File1: total", cntLinesFile1, "kept", len(linesFile1LL), percentage(len(linesFile1LL), cntLinesFile1))
-		log.Println("File2: total", cntLinesFile2, "kept", len(linesFile2LL), percentage(len(linesFile2LL), cntLinesFile2))
+		log.Println("Input1: total", cntLinesFile1, "kept", len(linesFile1LL), percentage(len(linesFile1LL), cntLinesFile1))
+		log.Println("Input2: total", cntLinesFile2, "kept", len(linesFile2LL), percentage(len(linesFile2LL), cntLinesFile2))
 		log.Println("Common:", cntSameLines, percentage(cntSameLines, cntLinesFile1), percentage(cntSameLines, cntLinesFile2))
 	}
 
@@ -299,7 +299,7 @@ func lineSearchLineOutputBatch() error {
 			linesFile1LL[line] = struct{}{}
 
 			if batchSize > STATSINT && cntLinesFile1%STATSINT == 0 {
-				vrb("read 2M lines from file1, total", cntLinesFile1)
+				vrb("read 2M lines from input1, total", cntLinesFile1)
 			}
 
 			if cntLinesFile1%batchSize == 0 {
@@ -314,8 +314,8 @@ func lineSearchLineOutputBatch() error {
 
 		// loop stats
 		vrb(
-			"file1", cntLinesFile1, len(linesFile1LL),
-			"file2", cntLinesFile2, len(linesFile2LL),
+			"input1", cntLinesFile1, len(linesFile1LL),
+			"input2", cntLinesFile2, len(linesFile2LL),
 			"matched", cntSameLines,
 		)
 
@@ -339,8 +339,8 @@ func lineSearchLineOutputBatch() error {
 		if len(linesFile2LL) > 0 { // or cntLinesFile2 ?
 			// loop stats
 			vrb(
-				"file1", cntLinesFile1, len(linesFile1LL),
-				"file2", cntLinesFile2, len(linesFile2LL),
+				"input1", cntLinesFile1, len(linesFile1LL),
+				"input2", cntLinesFile2, len(linesFile2LL),
 				"matched", cntSameLines,
 			)
 		}
@@ -378,8 +378,8 @@ func lineSearchLineOutputBatch() error {
 		}
 		// loop stats
 		vrb(
-			"file1", cntLinesFile1, len(linesFile1LL),
-			"file2", cntLinesFile2, len(linesFile2LL),
+			"input1", cntLinesFile1, len(linesFile1LL),
+			"input2", cntLinesFile2, len(linesFile2LL),
 			"matched", cntSameLines,
 		)
 
@@ -394,12 +394,12 @@ func lineSearchLineOutputBatch() error {
 	}
 
 	if verbose {
-		fmt.Println("File1: total", cntLinesFile1, "kept", len(linesFile1LL), percentage(len(linesFile1LL), cntLinesFile1))
-		fmt.Println("File2: total", cntLinesFile2, "kept", len(linesFile2LL), percentage(len(linesFile2LL), cntLinesFile2))
+		fmt.Println("Input1: total", cntLinesFile1, "kept", len(linesFile1LL), percentage(len(linesFile1LL), cntLinesFile1))
+		fmt.Println("Input2: total", cntLinesFile2, "kept", len(linesFile2LL), percentage(len(linesFile2LL), cntLinesFile2))
 		fmt.Println("Common:", cntSameLines, percentage(cntSameLines, cntLinesFile1), percentage(cntSameLines, cntLinesFile2))
 	} else {
-		log.Println("File1: total", cntLinesFile1, "kept", len(linesFile1LL), percentage(len(linesFile1LL), cntLinesFile1))
-		log.Println("File2: total", cntLinesFile2, "kept", len(linesFile2LL), percentage(len(linesFile2LL), cntLinesFile2))
+		log.Println("Input1: total", cntLinesFile1, "kept", len(linesFile1LL), percentage(len(linesFile1LL), cntLinesFile1))
+		log.Println("Input2: total", cntLinesFile2, "kept", len(linesFile2LL), percentage(len(linesFile2LL), cntLinesFile2))
 		log.Println("Common:", cntSameLines, percentage(cntSameLines, cntLinesFile1), percentage(cntSameLines, cntLinesFile2))
 	}
 
@@ -456,7 +456,7 @@ func keyMatchPayloadOutput() error {
 		linesFile1KP[k1] = p1
 
 		if cntLinesFile1%STATSINT == 0 {
-			vrb("read 2M lines from file1, total", cntLinesFile1)
+			vrb("read 2M lines from input1, total", cntLinesFile1)
 		}
 	}
 
@@ -465,7 +465,7 @@ func keyMatchPayloadOutput() error {
 		return fmt.Errorf("failed reading FD3: %v", err)
 	}
 
-	log.Println("read", cntLinesFile1, "file1 lines,", len(linesFile1KP), "are unique")
+	log.Println("read", cntLinesFile1, "input1 lines,", len(linesFile1KP), "are unique")
 
 	for sc4.Scan() {
 		line := sc4.Text()
@@ -508,8 +508,8 @@ func keyMatchPayloadOutput() error {
 		}
 
 		if cntLinesFile2%STATSINT == 0 {
-			vrb("read 2M lines from file2, total", cntLinesFile2)
-			vrb("file1 lines", len(linesFile1KP), "file2 lines", len(linesFile2KL), "matched lines", cntSameLines)
+			vrb("read 2M lines from input2, total", cntLinesFile2)
+			vrb("input1 lines", len(linesFile1KP), "input2 lines", len(linesFile2KL), "matched lines", cntSameLines)
 		}
 	}
 
@@ -518,8 +518,8 @@ func keyMatchPayloadOutput() error {
 		return fmt.Errorf("failed reading FD4: %v", err)
 	}
 
-	log.Println("read", cntLinesFile1, "file1 lines", cntLinesFile2, "file2 lines,")
-	log.Println(cntSameLines, "matched,", len(linesFile1LL), "file1 preserved", cntNewLines, "file2 preserved")
+	log.Println("read", cntLinesFile1, "input1 lines", cntLinesFile2, "input2 lines,")
+	log.Println(cntSameLines, "matched,", len(linesFile1LL), "input1 preserved", cntNewLines, "input2 preserved")
 
 	done := make(chan error)
 	waitFor := 0
@@ -574,7 +574,7 @@ func keyMatchLineOutput() error {
 		linesFile1KL[k1] = lineParts{payLoad: p1, line: line}
 
 		if cntLinesFile1%STATSINT == 0 {
-			vrb("read 2M lines from file1, total", cntLinesFile1, "unique keys", len(linesFile1KL))
+			vrb("read 2M lines from input1, total", cntLinesFile1, "unique keys", len(linesFile1KL))
 		}
 	}
 
@@ -583,7 +583,7 @@ func keyMatchLineOutput() error {
 		return fmt.Errorf("failed reading FD3: %v", err)
 	}
 
-	vrb("read", cntLinesFile1, "lines from file1, unique keys", len(linesFile1KL))
+	vrb("read", cntLinesFile1, "lines from input1, unique keys", len(linesFile1KL))
 
 	for sc4.Scan() {
 		line := sc4.Text()
@@ -628,12 +628,12 @@ func keyMatchLineOutput() error {
 		}
 
 		if cntLinesFile2%STATSINT == 0 {
-			vrb("read 2M lines from file2, total", cntLinesFile2)
-			vrb("file1 lines", len(linesFile1KL), "file2 lines", len(linesFile2KL), "matched lines", cntSameLines)
+			vrb("read 2M lines from input2, total", cntLinesFile2)
+			vrb("input1 lines", len(linesFile1KL), "input2 lines", len(linesFile2KL), "matched lines", cntSameLines)
 			// loop stats - TODO make this a vrb call
 			vrb(
-				"file1 kept", len(linesFile1KL),
-				"file2 kept", len(linesFile2KL),
+				"input1 kept", len(linesFile1KL),
+				"input2 kept", len(linesFile2KL),
 				"matched", cntSameLines,
 			)
 		}
@@ -645,12 +645,12 @@ func keyMatchLineOutput() error {
 	}
 
 	if verbose {
-		fmt.Println("File1: total", cntLinesFile1, "kept", len(linesFile1KL), percentage(len(linesFile1KL), cntLinesFile1))
-		fmt.Println("File2: total", cntLinesFile2, "kept", len(linesFile2KL), percentage(len(linesFile2KL), cntLinesFile2))
+		fmt.Println("Input1: total", cntLinesFile1, "kept", len(linesFile1KL), percentage(len(linesFile1KL), cntLinesFile1))
+		fmt.Println("Input2: total", cntLinesFile2, "kept", len(linesFile2KL), percentage(len(linesFile2KL), cntLinesFile2))
 		fmt.Println("Common:", cntSameLines, percentage(cntSameLines, cntLinesFile1), percentage(cntSameLines, cntLinesFile2))
 	} else {
-		log.Println("File1: total", cntLinesFile1, "kept", len(linesFile1KL), percentage(len(linesFile1KL), cntLinesFile1))
-		log.Println("File2: total", cntLinesFile2, "kept", len(linesFile2KL), percentage(len(linesFile2KL), cntLinesFile2))
+		log.Println("Input1: total", cntLinesFile1, "kept", len(linesFile1KL), percentage(len(linesFile1KL), cntLinesFile1))
+		log.Println("Input2: total", cntLinesFile2, "kept", len(linesFile2KL), percentage(len(linesFile2KL), cntLinesFile2))
 		log.Println("Common:", cntSameLines, percentage(cntSameLines, cntLinesFile1), percentage(cntSameLines, cntLinesFile2))
 	}
 
