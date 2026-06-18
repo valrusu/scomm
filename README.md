@@ -22,7 +22,7 @@ scomm [ -1 | -2 | -3 ] [ -d DELIMITER ] [ -H headerLines ] [ -b 0|-1|number ] [ 
 - `-H NUMBER` — Skip the first NUMBER header lines from both files.
 - `-k LIST` — Use character or field keys to determine matching lines.
 - `-p LIST` — Use payload fields to detect content updates when keys match.
-- `-d DELIMITER` — Emit `DELIMITER` between sections in the output when using -1/-2/-3.
+- `-d DELIMITER` — Treat `-k`/`-p` LISTs as delimited field positions split on `DELIMITER`, instead of fixed character positions.
 - `-b 0 | -1 | number` — Use batch mode, where INPUT1 is not read entirely in memory, and INPUT2 is read in batches.
 - `-m` - Output "merge-style" data. More info in the examples below.
 - `-l` - Output the full line when compareing by key/value. More info in the examples below.
@@ -31,8 +31,8 @@ scomm [ -1 | -2 | -3 ] [ -d DELIMITER ] [ -H headerLines ] [ -b 0|-1|number ] [ 
 
 - `3<INPUT1` - Read old data from file descriptor 3.
 - `4<INPUT2` - Read new data from file descriptor 4.
-- `5>OUTPUT1` - Write lines only in FILE2 (new data).
-- `6>OUTPUT2` - Write lines only in FILE1 (obsolete data).
+- `5>OUTPUT1` - Write lines only in FILE1 (obsolete data).
+- `6>OUTPUT2` - Write lines only in FILE2 (new data).
 - `7>OUTPUT3` - Write matched lines as they are detected.
 
 Inputs can be files but also the standard output of other processes, for example:
@@ -113,16 +113,18 @@ When using `-d DELIMITER`, keys and payloads refer to field positions rather tha
 scomm -1 -2 -3 3<old.txt 4<new.txt
 ```
 
-### Use Custom Delimiter Between Result Sections
+### Compare by Delimited Fields
+
+Key = field 1, payload = field 2, fields separated by `,`:
 
 ```sh
-scomm -D "---" -1 -2 -3 3<old.txt 4<new.txt
+scomm -d "," -k 1 -p 2 3<old.csv 4<new.csv 5>delete.txt 6>insert.txt
 ```
 
 ### Save Changes to Files
 
 ```sh
-scomm -3 3<old.txt 4<new.txt 5>new_only.txt 6>old_only.txt
+scomm -3 3<old.txt 4<new.txt 5>old_only.txt 6>new_only.txt
 ```
 
 ### Process Huge ZIP Files
@@ -149,7 +151,7 @@ End scomm, time taken 132 sec
 ## Advanced Example: Database vs File
 
 ```sh
-scomm 3< <(mysql -B -e 'SELECT ...') 4<new_data.txt 5>insert.txt 6>delete.txt
+scomm 3< <(mysql -B -e 'SELECT ...') 4<new_data.txt 5>delete.txt 6>insert.txt
 ```
 
 ## TODO
